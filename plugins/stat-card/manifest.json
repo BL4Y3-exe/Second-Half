@@ -1,0 +1,14 @@
+{
+  "id": "stat-card",
+  "name": "Stat card",
+  "version": "1.0.0",
+  "author": "Second Half",
+  "builtin": true,
+  "slot": "lower-third",
+  "needs": [
+    "title",
+    "stats"
+  ],
+  "default_duration_s": 5,
+  "description": "Plain numbers. The fallback when a story fails fact-checking."
+}

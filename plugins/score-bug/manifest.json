@@ -1,0 +1,14 @@
+{
+  "id": "score-bug",
+  "name": "Score bug",
+  "version": "1.0.0",
+  "author": "Second Half",
+  "builtin": true,
+  "slot": "corner",
+  "needs": [
+    "score",
+    "clock"
+  ],
+  "default_duration_s": 0,
+  "description": "Score and clock, always on screen."
+}

@@ -1,0 +1,14 @@
+{
+  "id": "pass-network",
+  "name": "Pass network",
+  "version": "1.0.0",
+  "author": "Second Half",
+  "builtin": true,
+  "slot": "full-pitch",
+  "needs": [
+    "team",
+    "links"
+  ],
+  "default_duration_s": 8,
+  "description": "Who passes to whom, drawn on the pitch."
+}

@@ -1,0 +1,16 @@
+{
+  "id": "shot-card",
+  "name": "Shot card",
+  "version": "1.0.0",
+  "author": "Second Half",
+  "builtin": true,
+  "slot": "lower-third",
+  "needs": [
+    "player",
+    "xg",
+    "shot_speed_kmh",
+    "distance_m"
+  ],
+  "default_duration_s": 6,
+  "description": "A shot's xG, speed and distance."
+}

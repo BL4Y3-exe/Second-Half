@@ -12,6 +12,7 @@ import contextlib
 import time
 from dataclasses import dataclass, field
 
+from agents import Orchestrator
 from simulator import MatchEngine, build_team
 from stats import MatchState
 
@@ -38,8 +39,10 @@ class LiveMatch:
     engine: MatchEngine
     state: MatchState
     meta: dict
+    orchestrator: Orchestrator | None = None
     subscribers: set[asyncio.Queue] = field(default_factory=set)
     task: asyncio.Task | None = None
+    agents_task: asyncio.Task | None = None
     last_frame: dict | None = None
     finished: bool = False
 
@@ -49,6 +52,9 @@ class LiveMatch:
         if self.last_frame is not None:
             out.append(("frame", self.last_frame))
         out += [("event", e) for e in self.state.events[-12:]]
+        if self.orchestrator is not None:
+            out += [("trace", s) for s in self.orchestrator.trace[-40:]]
+            out += [("overlay", o) for o in self.orchestrator.overlays[-6:]]
         return out
 
     def publish(self, kind: str, data: dict) -> None:
@@ -74,9 +80,14 @@ class MatchHub:
             "speed": key.speed,
             "pitch": [105.0, 68.0],
             "teams": {"HOME": home.to_dict(), "AWAY": away.to_dict()},
+            "model": "mock",
+            "languages": ["en", "es"],
         }
         state = MatchState(meta)
         live = LiveMatch(key, engine, state, meta)
+        live.orchestrator = Orchestrator(state, live.publish, speed=key.speed, seed=key.seed,
+                                         languages=tuple(meta["languages"]))
+        live.agents_task = asyncio.create_task(live.orchestrator.run())
         live.task = asyncio.create_task(self._run(live))
         self.matches[key] = live
         return live
@@ -87,32 +98,43 @@ class MatchHub:
         frame_every = max(0.1, key.speed / FRAME_RATE)  # match seconds between frames sent
         next_frame_t = 0.0
         next_stats = started
+        orch = live.orchestrator
         for tick in live.engine.run():
             # Pace match time against the wall clock.
             wait = started + tick.t / key.speed - time.perf_counter()
             if wait > 0:
                 await asyncio.sleep(wait)
+            triggers: list[dict] = []
             if tick.frame is not None:
-                for tr in live.state.apply_frame(tick.frame):
-                    live.publish("trigger", tr)
+                triggers += live.state.apply_frame(tick.frame)
                 live.last_frame = tick.frame
                 if tick.t >= next_frame_t:
                     live.publish("frame", tick.frame)
                     next_frame_t = tick.t + frame_every
             for ev in tick.events:
-                enriched, triggers = live.state.apply_event(ev)
+                enriched, trs = live.state.apply_event(ev)
                 live.publish("event", enriched)
-                for tr in triggers:
-                    live.publish("trigger", tr)
+                triggers += trs
+            for tr in triggers:
+                live.publish("trigger", tr)
+            if orch is not None:
+                orch.observe(tick.events, triggers, tick.t)
             now = time.perf_counter()
             if now >= next_stats or live.engine.finished:
                 live.publish("stats", live.state.snapshot())
                 next_stats = now + STATS_EVERY_S
             if wait <= 0:
                 await asyncio.sleep(0)  # let viewers drain when running flat out
+        if orch is not None:
+            orch.flush(live.state.t)
+            while not orch.queue.empty():  # let the team finish the recap
+                await asyncio.sleep(0.05)
+            await asyncio.sleep(0.2)
         live.finished = True
         live.publish("end", {"score": live.state.score})
         await asyncio.sleep(KEEP_FINISHED_S)
+        if live.agents_task is not None:
+            live.agents_task.cancel()
         if not live.subscribers and self.matches.get(key) is live:
             del self.matches[key]
 
@@ -130,6 +152,8 @@ class MatchHub:
         if not live.subscribers and live.task is not None and not live.finished:
             # Nobody is watching: stop the match rather than burn CPU.
             live.task.cancel()
+            if live.agents_task is not None:
+                live.agents_task.cancel()
             with contextlib.suppress(KeyError):
                 if self.matches[live.key] is live:
                     del self.matches[live.key]

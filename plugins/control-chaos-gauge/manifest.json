@@ -1,0 +1,13 @@
+{
+  "id": "control-chaos-gauge",
+  "name": "Control vs Chaos",
+  "version": "1.0.0",
+  "author": "Second Half",
+  "builtin": true,
+  "slot": "lower-third",
+  "needs": [
+    "control_chaos"
+  ],
+  "default_duration_s": 6,
+  "description": "How settled or frantic the game is."
+}

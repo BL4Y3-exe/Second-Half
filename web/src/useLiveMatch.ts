@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { Frame, MatchEvent, Meta, Snapshot, Trigger } from "./types";
+import type { Frame, MatchEvent, Meta, Overlay, Snapshot, TraceStep, Trigger } from "./types";
 
 export interface MatchRequest {
   home: string;
@@ -14,7 +14,11 @@ export interface FrameBuffer {
   cur: Frame | null;
   arrivedAt: number; // performance.now() when `cur` arrived
   interval: number; // expected ms between frames
+  history: Frame[]; // recent frames, for Telestrator replays
 }
+
+const HISTORY = 2400;
+const emptyBuffer = (): FrameBuffer => ({ prev: null, cur: null, arrivedAt: 0, interval: 83, history: [] });
 
 export type Status = "connecting" | "live" | "finished" | "error";
 
@@ -24,8 +28,10 @@ export function useLiveMatch(req: MatchRequest | null) {
   const [events, setEvents] = useState<MatchEvent[]>([]);
   const [triggers, setTriggers] = useState<Trigger[]>([]);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
+  const [overlays, setOverlays] = useState<Overlay[]>([]);
+  const [trace, setTrace] = useState<TraceStep[]>([]);
   const [status, setStatus] = useState<Status>("connecting");
-  const frames = useRef<FrameBuffer>({ prev: null, cur: null, arrivedAt: 0, interval: 83 });
+  const frames = useRef<FrameBuffer>(emptyBuffer());
 
   useEffect(() => {
     if (!req) return;
@@ -33,8 +39,10 @@ export function useLiveMatch(req: MatchRequest | null) {
     setEvents([]);
     setTriggers([]);
     setSnapshot(null);
+    setOverlays([]);
+    setTrace([]);
     setStatus("connecting");
-    frames.current = { prev: null, cur: null, arrivedAt: 0, interval: 83 };
+    frames.current = emptyBuffer();
 
     const qs = new URLSearchParams({
       home: req.home,
@@ -64,6 +72,8 @@ export function useLiveMatch(req: MatchRequest | null) {
       buf.prev = buf.cur;
       buf.cur = f;
       buf.arrivedAt = now;
+      buf.history.push(f);
+      if (buf.history.length > HISTORY + 200) buf.history.splice(0, 200);
     });
     source.addEventListener("event", (e) => {
       pendingEvents.push(JSON.parse((e as MessageEvent).data));
@@ -74,6 +84,14 @@ export function useLiveMatch(req: MatchRequest | null) {
       setTriggers((old) => [...old, tr].slice(-100));
     });
     source.addEventListener("stats", (e) => setSnapshot(JSON.parse((e as MessageEvent).data)));
+    source.addEventListener("overlay", (e) => {
+      const ov: Overlay = JSON.parse((e as MessageEvent).data);
+      setOverlays((old) => (old.some((o) => o.id === ov.id) ? old : [...old, ov].slice(-60)));
+    });
+    source.addEventListener("trace", (e) => {
+      const step: TraceStep = JSON.parse((e as MessageEvent).data);
+      setTrace((old) => (old.some((s) => s.id === step.id) ? old : [...old, step].slice(-300)));
+    });
     source.addEventListener("end", () => {
       setStatus("finished");
       source.close();
@@ -88,5 +106,5 @@ export function useLiveMatch(req: MatchRequest | null) {
     };
   }, [req]);
 
-  return { meta, events, triggers, snapshot, status, frames };
+  return { meta, events, triggers, snapshot, overlays, trace, status, frames };
 }

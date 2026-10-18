@@ -1,0 +1,15 @@
+{
+  "id": "player-tag",
+  "name": "Player tag",
+  "version": "1.0.0",
+  "author": "Second Half",
+  "builtin": true,
+  "slot": "pitch",
+  "needs": [
+    "player",
+    "metric",
+    "value"
+  ],
+  "default_duration_s": 5,
+  "description": "A label that follows a player, for speed and distance milestones."
+}

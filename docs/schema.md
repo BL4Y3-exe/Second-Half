@@ -91,6 +91,64 @@ Kinds: `goal`, `big_chance` (xG 0.3+ and not scored), `momentum_swing`,
 `distance_10k` (first three players past 10 km). Priority 1 must be shown,
 2 is worth showing, 3 is filler.
 
+## Overlay item (Director to browser)
+
+One graphic the Director scheduled. Sent as the `overlay` SSE event.
+
+```json
+{"id": "ov-0010", "moment_id": "m-010", "kind": "goal", "clock": "42:58",
+ "show_at": 2580.3, "duration_s": 7.0, "priority": 1,
+ "plugin": "goal-card", "slot": "lower-third", "team": "HOME", "player": "h-08",
+ "headline": "GOAL · Kofi Holloway",
+ "data": {"player": "Kofi Holloway", "xg": 0.66, "distance_m": 4, "shot_speed_kmh": 79,
+          "score_home": 1, "score_away": 0},
+ "telestrator": {"arrows": [{"kind": "shot", "from": [101.4, 35.2], "to": [105.0, 33.6], "t": 2578.2}],
+                 "zones": [{"kind": "circle", "center": [101.4, 35.2], "r": 2.5, "label": "0.66 xG"}],
+                 "highlight": ["h-08"], "window": [2576.2, 2580.2]},
+ "facts_checked": true, "fallback": false, "source_events": ["e-01389", "e-01388"],
+ "story": "Kofi Holloway scores from 4 m at 79 km/h. The chance was worth 0.66 xG; HAR 1-0 KMR.",
+ "text": {"en": {"analyst": "...", "casual": "GOAL! Kofi Holloway scores for Harbourside Athletic! HAR 1-0 KMR.",
+                 "player": "Kofi Holloway today: 1 goal from 2 shots, 1.18 xG."},
+          "es": {"analyst": "...", "casual": "...", "player": "..."}}}
+```
+
+- `show_at` is in match seconds: the browser puts the item up when the
+  match clock reaches it and keeps it for `duration_s` seconds of viewing
+  time. A lower `priority` number takes the slot from a higher one.
+- `slot`: `lower-third`, `corner`, `pitch` (pinned to a player),
+  `full-pitch` or `full-screen`.
+- `telestrator` is null when the moment has no geometry. Arrow `kind` is
+  `pass`, `carry` or `shot`; `t` is when it happened, and `window` is the
+  stretch of play the browser replays under the drawing.
+- `fallback` is true when the story failed fact-checking twice and a plain
+  `stat-card` went out instead (`data.line` holds its text).
+- `text[lang][mode]` is the Persona agent's version for each viewer mode
+  (`analyst`, `casual`, `player`) and language.
+
+## Agent trace step
+
+One handoff between agents. Sent as the `trace` SSE event.
+
+```json
+{"id": "st-00042", "t": 2578.2, "clock": "42:58", "moment_id": "m-010",
+ "agent": "fact_checker", "action": "rejected",
+ "summary": "says 6 m, but match data has 4 m (distance_m)", "status": "rejected", "ms": 0.0,
+ "detail": {"problems": ["says 6 m, but match data has 4 m (distance_m)"], "checked": ["6 m", "79 km/h"]}}
+```
+
+`agent` is one of `spotter`, `analyst`, `storyteller`, `fact_checker`,
+`director`, `persona`, `recap`. `status` is `ok`, `rejected`, `fallback` or
+`skipped` (a moment the Spotter passed over or the Director held back; its
+`moment_id` is then the trigger id).
+
+## Graphics plugin manifest (`plugins/<id>/manifest.json`)
+
+```json
+{"id": "goal-card", "name": "Goal card", "version": "1.0.0", "author": "Second Half", "builtin": true,
+ "slot": "lower-third", "needs": ["scorer", "assist", "xg", "score"], "default_duration_s": 7,
+ "description": "Lower third for a goal, with the chance quality."}
+```
+
 ## Saved match (`python -m simulator export`)
 
 ```json

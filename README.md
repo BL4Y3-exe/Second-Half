@@ -9,9 +9,10 @@ club, any language).
 Built for the Microsoft *Inside the Game* developer hackathon. All clubs,
 players and matches are fictional.
 
-> **Status:** early build. Done: match simulator, stats engine, live feed
-> server and the browser pitch view. Next: agents, overlays as plugins,
-> Telestrator, viewer modes.
+> **Status:** in progress. Done: match simulator, stats engine, live feed,
+> browser pitch view, and the agent team in mock mode with graphics
+> plugins, the Telestrator, viewer modes and the agent trace. Next: the MCP
+> endpoint, real models on Microsoft Foundry, and the Azure deployment.
 
 ## Quickstart
 
@@ -33,8 +34,23 @@ python -m api
 
 The page starts Harbourside Athletic v Kingsmere Rovers (seed 9: a
 second-half comeback with a stoppage-time winner) at 10x speed. Pick
-other clubs, a seed and a speed at the top and press **Kick off**. You can
-also link straight to a match: `http://127.0.0.1:8000/?seed=12&speed=20`.
+other clubs, a seed and a speed at the top and press **Kick off**.
+
+While the match plays, the agent team puts graphics over the pitch: goal,
+chance and pass cards, momentum swings, top-speed tags and half-time and
+full-time recaps. Moments with a Telestrator drawing replay the move on the
+pitch with the arrows drawn in as the ball travels. Above the pitch you can
+switch the viewer mode (Analyst, Casual fan, Player focus), the language
+(English, Español) and pick a favourite club. The **Agent trace** tab on the
+right shows every handoff between the agents, including the wrong numbers
+the Fact-checker caught.
+
+No Azure account or API key is needed: the agents run on a built-in mock
+model that writes from templates and deliberately slips a wrong number into
+some first drafts, so you can watch the Fact-checker catch it.
+
+You can link straight to a set-up, which is handy for demos:
+`http://127.0.0.1:8000/?seed=12&speed=20&mode=casual&lang=es&fav=HOME&tab=trace`.
 
 **Working on the web app?** Run `python -m api` in one terminal and
 `npm run dev` inside `web/` in another, then open http://localhost:5173.
@@ -59,6 +75,11 @@ python -m simulator export --seed 9
 
 # run the stats engine over a match: xG, field tilt, PPDA, key-moment triggers
 python -m stats --seed 9
+
+# run a match through the agent team and print what it put on screen
+python -m agents --seed 9
+python -m agents --seed 9 --trace              # every handoff, rejected drafts marked x
+python -m agents --seed 9 --mode casual --lang es
 ```
 
 Clubs: `harbourside`, `kingsmere`, `ashford`, `northgate` (`--home`,
@@ -67,10 +88,10 @@ Clubs: `harbourside`, `kingsmere`, `ashford`, `northgate` (`--home`,
 ## How it fits together
 
 ```
-simulator  ->  stats engine  ->  live feed (FastAPI, Server-Sent Events)  ->  web app (React)
- positions      xG, speeds,        one match per (clubs, seed, speed),        pitch, score bug,
- + events       momentum,          shared by every viewer                     stats, match feed
-                triggers
+simulator  ->  stats engine  ->  agent team  ->  live feed (FastAPI, SSE)  ->  web app (React)
+ positions      xG, speeds,       Spotter ...      one match per (clubs,       pitch, graphics,
+ + events       momentum,         Recap, with      seed, speed), shared        Telestrator, viewer
+                triggers          match tools      by every viewer             modes, agent trace
 ```
 
 ### Simulator (`simulator/`)
@@ -106,13 +127,43 @@ Plain code, no AI: every number an agent says later is checked against it.
   momentum swing, shot over 100 km/h, killer pass, fastest sprint of the
   match, 10 km covered.
 
+### Agent team (`agents/`)
+
+Seven agents work each key moment in turn:
+
+| Agent | Job |
+| --- | --- |
+| Spotter | Watches the stats engine's triggers, merges ones that belong together (a shot and its goal) and holds back minor moments so the screen isn't cluttered. |
+| Analyst | Looks up the facts with the match tools: the passage of play, xG, speeds, the player's and team's numbers. |
+| Storyteller | Writes one or two sentences on why the moment matters, using only those facts. |
+| Fact-checker | Plain code, no AI. Every number and player name in the draft must match match state. If not, it sends the draft back with the reason; after two failures a plain stat card goes out instead. |
+| Director | Picks the graphics plugin and slot, builds the Telestrator drawing from real event positions, and schedules items so graphics never pile up. |
+| Persona | Rewrites the approved story for each viewer mode and language; each version is fact-checked again. |
+| Recap | Writes the half-time and full-time summaries with player ratings. |
+
+The agents talk to a model through one small interface
+(`agents/models.py`). The default is the mock model; the Microsoft Foundry
+client plugs in behind the same interface. The prompts are in
+`agents/prompts/`.
+
+**Match tools (`mcp_server/`).** What the Analyst and Recap agents can ask
+about the match: score, team and player stats, the sequence that led to an
+event, trends, comparisons, top players and the graphics plugins
+available. These are the tools the MCP server exposes.
+
+**Graphics plugins (`plugins/`).** Every graphic is a plugin with a
+manifest saying which stats it needs, which slot it uses (lower third,
+corner, pitch, full screen) and how long it stays up. The Director chooses
+from these; the browser draws them (`web/src/plugins/`).
+
 ### Live feed (`api/`)
 
 `GET /api/live?home=harbourside&away=kingsmere&seed=9&speed=10` streams
 Server-Sent Events: `meta` (team sheets), `frame` (positions, about 12 a
 second), `event` (with computed stats attached), `trigger`, `stats` (a
-snapshot every second) and `end`. Viewers of the same match share one
-running match.
+snapshot every second), `overlay` (a graphic the Director scheduled),
+`trace` (one agent handoff) and `end`. Viewers of the same match share one
+running match and one agent team.
 
 The data formats are documented in [docs/schema.md](docs/schema.md).
 

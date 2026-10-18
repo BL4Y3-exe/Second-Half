@@ -1,0 +1,15 @@
+{
+  "id": "recap-card",
+  "name": "Recap",
+  "version": "1.0.0",
+  "author": "Second Half",
+  "builtin": true,
+  "slot": "full-screen",
+  "needs": [
+    "score",
+    "moments",
+    "ratings"
+  ],
+  "default_duration_s": 12,
+  "description": "Half-time and full-time summary with player ratings."
+}

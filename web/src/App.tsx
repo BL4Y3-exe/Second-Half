@@ -1,10 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import { Pitch } from "./pitch/Pitch";
+import { LANGS, MODES, tr } from "./i18n";
+import { Pitch, type Pin, type Replay } from "./pitch/Pitch";
 import { EventFeed } from "./overlays/EventFeed";
+import { OverlayLayer } from "./overlays/OverlayLayer";
 import { ScoreBug } from "./overlays/ScoreBug";
 import { StatsPanel } from "./overlays/StatsPanel";
-import type { Club, Side } from "./types";
+import { TracePanel } from "./overlays/TracePanel";
+import { pinValue } from "./plugins/builtin";
+import type { Club, Lang, Mode, Side } from "./types";
 import { useLiveMatch, type MatchRequest } from "./useLiveMatch";
+import { useOverlaySchedule } from "./useOverlaySchedule";
 
 const SPEEDS = [1, 5, 10, 20, 40];
 
@@ -12,10 +17,15 @@ export default function App() {
   const [clubs, setClubs] = useState<Club[]>([]);
   const [form, setForm] = useState({ home: "harbourside", away: "kingsmere", seed: 9, speed: 10 });
   const [req, setReq] = useState<MatchRequest | null>(null);
-  const { meta, events, triggers, snapshot, status, frames } = useLiveMatch(req);
+  const [mode, setMode] = useState<Mode>("analyst");
+  const [lang, setLang] = useState<Lang>("en");
+  const [favourite, setFavourite] = useState<Side | null>(null);
+  const [tab, setTab] = useState<"feed" | "trace">("feed");
+  const { meta, events, triggers, snapshot, overlays, trace, status, frames } = useLiveMatch(req);
+  const onAir = useOverlaySchedule(overlays, frames, { speed: meta?.speed ?? form.speed, favourite });
 
   useEffect(() => {
-    // ?seed=7&speed=20 in the address bar picks the match to start with.
+    // ?seed=7&speed=20&mode=casual&lang=es&fav=HOME&tab=trace in the address bar sets up the screen.
     const params = new URLSearchParams(window.location.search);
     const start = {
       ...form,
@@ -23,6 +33,13 @@ export default function App() {
       speed: Number(params.get("speed") ?? form.speed),
     };
     setForm(start);
+    const m = params.get("mode");
+    if (MODES.some((x) => x.id === m)) setMode(m as Mode);
+    const l = params.get("lang");
+    if (LANGS.some((x) => x.id === l)) setLang(l as Lang);
+    const f = params.get("fav");
+    if (f === "HOME" || f === "AWAY") setFavourite(f);
+    if (params.get("tab") === "trace") setTab("trace");
     fetch("/api/clubs")
       .then((r) => r.json())
       .then(setClubs)
@@ -43,6 +60,23 @@ export default function App() {
     }
     return s;
   }, [meta, events]);
+
+  const lower = onAir["lower-third"];
+  const replay: Replay | null =
+    lower?.overlay.telestrator != null
+      ? {
+          drawing: {
+            ...lower.overlay.telestrator,
+            zones: lower.overlay.telestrator.zones.map((z) => ({ ...z, label: z.label === "the gap" ? tr(lang, "the_gap") : z.label })),
+          },
+          startedAt: lower.startedAt,
+          duration_s: lower.overlay.duration_s,
+        }
+      : null;
+  const tagged = onAir["pitch"]?.overlay;
+  const pin: Pin | null =
+    tagged?.player != null ? { player: tagged.player, title: tr(lang, tagged.kind), value: pinValue(tagged) } : null;
+  const caught = trace.filter((s) => s.status === "rejected").length;
 
   const lastEvent = events[events.length - 1];
   const clock = snapshot?.clock ?? lastEvent?.clock ?? "00:00";
@@ -111,12 +145,43 @@ export default function App() {
         <section className="stage">
           {meta ? (
             <>
+              <div className="viewer">
+                <div className="seg" role="group" aria-label="Viewer mode">
+                  {MODES.map((m) => (
+                    <button key={m.id} className={mode === m.id ? "on" : ""} onClick={() => setMode(m.id)}>
+                      {m.label[lang]}
+                    </button>
+                  ))}
+                </div>
+                <div className="seg" role="group" aria-label="Language">
+                  {LANGS.filter((l) => !meta.languages || meta.languages.includes(l.id)).map((l) => (
+                    <button key={l.id} className={lang === l.id ? "on" : ""} onClick={() => setLang(l.id)}>
+                      {l.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="seg" role="group" aria-label="Favourite club">
+                  <button className={favourite === null ? "on" : ""} onClick={() => setFavourite(null)}>
+                    Neutral
+                  </button>
+                  {(["HOME", "AWAY"] as Side[]).map((side) => (
+                    <button key={side} className={favourite === side ? "on" : ""} onClick={() => setFavourite(side)}>
+                      <i className="dot" style={{ background: meta.teams[side].colors[0] }} />
+                      {meta.teams[side].short} fan
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div className="pitch-wrap">
-                <Pitch meta={meta} frames={frames} slots={slots} />
+                <Pitch meta={meta} frames={frames} slots={slots} replay={replay} pin={pin} />
                 <div className="overlay-top-left">
                   <ScoreBug meta={meta} snapshot={snapshot} clock={clock} />
                 </div>
-                {status === "finished" && <div className="overlay-banner">Full time</div>}
+                {replay && <div className="replay-badge">{tr(lang, "replay")}</div>}
+                <OverlayLayer onAir={onAir} meta={meta} mode={mode} lang={lang} />
+                {status === "finished" && !onAir["full-screen"] && (
+                  <div className="overlay-banner">{tr(lang, "full_time")}</div>
+                )}
               </div>
               <StatsPanel meta={meta} snapshot={snapshot} />
             </>
@@ -126,7 +191,26 @@ export default function App() {
             </div>
           )}
         </section>
-        <aside>{meta && <EventFeed meta={meta} events={events} triggers={triggers} />}</aside>
+        <aside>
+          {meta && (
+            <>
+              <div className="tabs" role="tablist">
+                <button role="tab" aria-selected={tab === "feed"} onClick={() => setTab("feed")}>
+                  Match feed
+                </button>
+                <button role="tab" aria-selected={tab === "trace"} onClick={() => setTab("trace")}>
+                  Agent trace
+                  {caught > 0 && <span className="pill">{caught} caught</span>}
+                </button>
+              </div>
+              {tab === "feed" ? (
+                <EventFeed meta={meta} events={events} triggers={triggers} />
+              ) : (
+                <TracePanel meta={meta} trace={trace} />
+              )}
+            </>
+          )}
+        </aside>
       </main>
     </div>
   );

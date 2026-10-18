@@ -1,0 +1,15 @@
+{
+  "id": "momentum-bar",
+  "name": "Momentum bar",
+  "version": "1.0.0",
+  "author": "Second Half",
+  "builtin": true,
+  "slot": "lower-third",
+  "needs": [
+    "momentum",
+    "field_tilt",
+    "team"
+  ],
+  "default_duration_s": 6,
+  "description": "Which team is on top over the last 5 minutes."
+}

@@ -25,6 +25,8 @@ export interface Meta {
   speed: number;
   pitch: [number, number];
   teams: Record<Side, Team>;
+  model?: string; // "mock" or the Foundry deployment the agents run on
+  languages?: Lang[];
 }
 
 export interface Frame {
@@ -95,4 +97,62 @@ export interface Club {
   colors: [string, string];
   style: string;
   formation: string;
+}
+
+export type Mode = "analyst" | "casual" | "player";
+export type Lang = "en" | "es";
+
+export interface TelestratorArrow {
+  kind: "pass" | "carry" | "shot";
+  from: XY;
+  to: XY;
+  t: number; // match seconds, so a replay can draw each arrow as the play reaches it
+}
+
+export interface TelestratorZone {
+  kind: "circle";
+  center: XY;
+  r: number;
+  label?: string;
+}
+
+export interface Telestrator {
+  arrows: TelestratorArrow[];
+  zones: TelestratorZone[];
+  highlight: string[];
+  window: [number, number]; // match seconds the replay covers
+}
+
+export interface Overlay {
+  id: string;
+  moment_id: string;
+  kind: string;
+  clock: string;
+  show_at: number;
+  duration_s: number;
+  priority: number;
+  plugin: string;
+  slot: string;
+  team: Side | null;
+  player: string | null;
+  headline: string;
+  data: Record<string, unknown>;
+  telestrator: Telestrator | null;
+  facts_checked: boolean;
+  fallback: boolean;
+  story: string;
+  text: Record<string, Record<Mode, string>>;
+}
+
+export interface TraceStep {
+  id: string;
+  t: number;
+  clock: string;
+  moment_id: string;
+  agent: string;
+  action: string;
+  summary: string;
+  status: "ok" | "rejected" | "retry" | "fallback" | "skipped";
+  ms: number;
+  detail: Record<string, unknown>;
 }

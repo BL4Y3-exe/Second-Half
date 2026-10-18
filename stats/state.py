@@ -159,8 +159,9 @@ class MatchState:
                 self.player[kp]["xa"] += xg
             source = [ev["id"]] + ([self._last_pass["id"]] if self._last_pass and kp else [])
             if xg >= BIG_CHANCE_XG and ev["outcome"] != "goal":
-                triggers.append(self._trigger("big_chance", side, pid, xg,
-                                              f"Big chance: {self._name(pid)} ({xg:.2f} xG), {ev['outcome']}", source))
+                outcome = ev["outcome"].replace("_", " ")
+                label = f"Big chance: {self._name(pid)} ({xg:.2f} xG), {outcome}"
+                triggers.append(self._trigger("big_chance", side, pid, xg, label, source))
             if ev["shot_speed_kmh"] >= SHOT_TRIGGER_KMH:
                 label = f"{self._name(pid)} strikes it at {ev['shot_speed_kmh']:.0f} km/h"
                 triggers.append(self._trigger("shot_speed", side, pid, ev["shot_speed_kmh"], label, source))
