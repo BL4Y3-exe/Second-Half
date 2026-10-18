@@ -52,6 +52,7 @@ export function useLiveMatch(req: MatchRequest | null) {
     });
     const source = new EventSource(`/api/live?${qs}`);
     let pendingEvents: MatchEvent[] = [];
+    const seenEvents = new Set<string>();
     let flushTimer: number | undefined;
     const flush = () => {
       flushTimer = undefined;
@@ -76,7 +77,10 @@ export function useLiveMatch(req: MatchRequest | null) {
       if (buf.history.length > HISTORY + 200) buf.history.splice(0, 200);
     });
     source.addEventListener("event", (e) => {
-      pendingEvents.push(JSON.parse((e as MessageEvent).data));
+      const ev: MatchEvent = JSON.parse((e as MessageEvent).data);
+      if (seenEvents.has(ev.id)) return; // a reconnect replays the latest events
+      seenEvents.add(ev.id);
+      pendingEvents.push(ev);
       if (flushTimer === undefined) flushTimer = window.setTimeout(flush, 150);
     });
     source.addEventListener("trigger", (e) => {

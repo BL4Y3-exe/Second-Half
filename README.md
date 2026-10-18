@@ -12,7 +12,7 @@ players and matches are fictional.
 > **Status:** in progress. Done: match simulator, stats engine, live feed,
 > browser pitch view, the agent team with graphics plugins (on Microsoft
 > Foundry or a built-in mock model), the Telestrator, viewer modes and the
-> agent trace, and the MCP server. Next: the Azure deployment.
+> agent trace, the MCP server, and the Azure deployment set-up.
 
 ## Quickstart
 
@@ -264,6 +264,47 @@ cd web && npm run typecheck
 
 CI runs lint, tests and the web build on every push
 (`.github/workflows/ci.yml`).
+
+## Deploying to Azure
+
+The public demo runs on Azure Container Apps, with the agents on
+Microsoft Foundry:
+
+- `Dockerfile` builds one image with the web app, the API and the MCP
+  endpoint.
+- When the tests pass on `main`, GitHub Actions publishes that image to
+  `ghcr.io/<owner>/<repo>:latest`.
+- `infra/main.bicep` creates a Container Apps environment (with a Log
+  Analytics workspace for logs) and the app, gives the app a managed
+  identity, and grants that identity the Foundry User role on your Foundry
+  resource, so there are no keys anywhere.
+- `infra/deploy.ps1` fills the template in from your `.env` and deploys it
+  to the Foundry resource's resource group.
+
+The first time:
+
+1. Push to `main` and wait for the CI **image** job. Then open the package
+   on GitHub (the repository owner's profile > Packages > second-half) and
+   make it public under Package settings, so Azure can pull it.
+2. With `.env` set up as in [Running the agents on Microsoft
+   Foundry](#running-the-agents-on-microsoft-foundry) and the Azure CLI
+   signed in, run this from the repository root:
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File infra\deploy.ps1
+   ```
+
+   It prints the app's address; the MCP endpoint is that address plus
+   `/mcp`.
+
+After later pushes, run the same command again to roll out the new image.
+The app runs as a single replica, because live matches are kept in memory
+and shared by every viewer, and stays warm so visitors never wait
+(`-MinReplicas 0` lets it sleep when nobody is using it). `/api/health`
+shows which commit and model are running.
+
+You can also run the image yourself: `docker build -t second-half .` and
+`docker run -p 8000:8000 second-half`.
 
 ## Licence
 

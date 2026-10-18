@@ -15,7 +15,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from mcp.server.transport_security import TransportSecuritySettings
 
-from agents.settings import load_env
+from agents.settings import foundry_settings, load_env
 from mcp_server import list_plugins
 from mcp_server.server import build_server
 from simulator import CLUBS
@@ -60,7 +60,9 @@ app.router.routes.extend(mcp_http.routes)
 
 @app.get("/api/health")
 def health() -> dict:
-    return {"ok": True, "live_matches": len(hub.matches)}
+    model = (foundry_settings() or {}).get("model", "mock")
+    return {"ok": True, "live_matches": len(hub.matches), "model": model,
+            "release": os.environ.get("SECOND_HALF_RELEASE", "dev")}
 
 
 @app.get("/api/clubs")

@@ -9,7 +9,8 @@ client = TestClient(app)
 
 
 def test_health_and_clubs():
-    assert client.get("/api/health").json()["ok"] is True
+    health = client.get("/api/health").json()
+    assert health["ok"] is True and health["model"] == "mock" and health["release"] == "dev"
     clubs = client.get("/api/clubs").json()
     assert {c["key"] for c in clubs} >= {"harbourside", "kingsmere"}
 
@@ -21,7 +22,7 @@ def test_live_rejects_bad_clubs():
 
 def test_hub_streams_a_live_match():
     async def watch() -> dict[str, int]:
-        hub = MatchHub()
+        hub = MatchHub(grace_s=0)
         live = hub.get_or_start(MatchKey("harbourside", "kingsmere", 5, 60.0))
         q = hub.subscribe(live)
         seen: dict[str, int] = {}
@@ -57,3 +58,21 @@ def test_outside_plugins_are_served_locked_down():
 def test_web_app_route_stays_inside_the_build_folder():
     r = client.get("/..%2F..%2Fpyproject.toml")
     assert "second-half" not in r.text
+
+
+def test_a_viewer_who_reconnects_finds_the_same_match():
+    async def drop_and_rejoin() -> None:
+        hub = MatchHub(grace_s=0.5)
+        key = MatchKey("harbourside", "kingsmere", 6, 60.0)
+        live = hub.get_or_start(key)
+        hub.unsubscribe(live, hub.subscribe(live))  # the stream drops...
+        await asyncio.sleep(0.1)
+        assert hub.get_or_start(key) is live  # ...and the viewer is back before the grace period ends
+        q = hub.subscribe(live)
+        await asyncio.sleep(0.6)
+        assert key in hub.matches and not live.task.done()
+        hub.unsubscribe(live, q)  # this time nobody comes back
+        await asyncio.sleep(0.6)
+        assert key not in hub.matches and live.task.done()
+
+    asyncio.run(drop_and_rejoin())

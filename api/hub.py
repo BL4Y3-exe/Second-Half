@@ -22,6 +22,9 @@ FRAME_RATE = 12.0  # position frames per wall-clock second sent to viewers
 STATS_EVERY_S = 1.0  # wall-clock seconds between stats snapshots
 KEEP_FINISHED_S = 60.0  # keep a finished match around briefly for late viewers
 FINISH_RECAP_S = 45.0  # longest the full-time whistle waits for the agent team to finish
+# How long an unwatched match keeps playing. A viewer whose stream drops (a proxy timeout, a flaky
+# connection) reconnects within seconds and should find the same match still running.
+RECONNECT_GRACE_S = 20.0
 
 
 @dataclass(frozen=True)
@@ -73,8 +76,10 @@ class LiveMatch:
 
 
 class MatchHub:
-    def __init__(self) -> None:
+    def __init__(self, grace_s: float = RECONNECT_GRACE_S) -> None:
         self.matches: dict[MatchKey, LiveMatch] = {}
+        self.grace_s = grace_s
+        self._stops: set[asyncio.Task] = set()
 
     def get_or_start(self, key: MatchKey) -> LiveMatch:
         live = self.matches.get(key)
@@ -157,14 +162,29 @@ class MatchHub:
 
     def unsubscribe(self, live: LiveMatch, q: asyncio.Queue) -> None:
         live.subscribers.discard(q)
-        if not live.subscribers and live.task is not None and not live.finished:
-            # Nobody is watching: stop the match rather than burn CPU.
-            live.task.cancel()
-            if live.agents_task is not None:
-                live.agents_task.cancel()
-            with contextlib.suppress(KeyError):
-                if self.matches[live.key] is live:
-                    del self.matches[live.key]
+        if live.subscribers or live.task is None or live.finished:
+            return
+        if self.grace_s <= 0:
+            self._stop_if_unwatched(live)
+            return
+        stop = asyncio.create_task(self._stop_later(live))
+        self._stops.add(stop)
+        stop.add_done_callback(self._stops.discard)
+
+    async def _stop_later(self, live: LiveMatch) -> None:
+        await asyncio.sleep(self.grace_s)
+        self._stop_if_unwatched(live)
+
+    def _stop_if_unwatched(self, live: LiveMatch) -> None:
+        """Nobody is watching: stop the match rather than burn CPU."""
+        if live.subscribers or live.task is None or live.finished:
+            return
+        live.task.cancel()
+        if live.agents_task is not None:
+            live.agents_task.cancel()
+        with contextlib.suppress(KeyError):
+            if self.matches[live.key] is live:
+                del self.matches[live.key]
 
 
 class HubSource:
