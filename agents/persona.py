@@ -30,7 +30,8 @@ class Persona:
                 prompt = f"Mode: {mode}. Language: {lang}.\nApproved text: {approved}\nFacts: {facts.values}"
                 text = (await self.model.complete(
                     "persona", SYSTEM, prompt,
-                    {"facts": facts.values, "kind": moment.kind, "mode": mode, "lang": lang, "approved": approved},
+                    {"facts": facts.values, "kind": moment.kind, "clock": moment.clock, "mode": mode, "lang": lang,
+                     "approved": approved},
                 )).strip()
                 verdict = self.checker.check(text, facts)
                 if not verdict.approved:

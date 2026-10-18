@@ -45,12 +45,19 @@ switch the viewer mode (Analyst, Casual fan, Player focus), the language
 right shows every handoff between the agents, including the wrong numbers
 the Fact-checker caught.
 
+**Split screen** (top right) shows the same live match to two viewers side
+by side, each with their own mode, language and club, next to the agent
+trace. By default it is an English-speaking analyst and a Spanish-speaking
+casual Kingsmere fan. It is laid out for a 1920x1080 screen recording.
+
 No Azure account or API key is needed: the agents run on a built-in mock
 model that writes from templates and deliberately slips a wrong number into
-some first drafts, so you can watch the Fact-checker catch it.
+some first drafts (always including the first goal's), so you can watch the
+Fact-checker catch it.
 
 You can link straight to a set-up, which is handy for demos:
-`http://127.0.0.1:8000/?seed=12&speed=20&mode=casual&lang=es&fav=HOME&tab=trace`.
+`http://127.0.0.1:8000/?seed=12&speed=20&mode=casual&lang=es&fav=HOME&tab=trace`,
+or `http://127.0.0.1:8000/?view=split` for the split screen.
 
 **Working on the web app?** Run `python -m api` in one terminal and
 `npm run dev` inside `web/` in another, then open http://localhost:5173.
@@ -156,6 +163,13 @@ manifest saying which stats it needs, which slot it uses (lower third,
 corner, pitch, full screen) and how long it stays up. The Director chooses
 from these; the browser draws them (`web/src/plugins/`).
 
+Plugins from outside authors run in a sandbox: a locked-down iframe with
+no access to the page and no network, which only receives the data it
+asked for. `plugins/xg-race/` is an example from a made-up outside studio,
+Touchline Labs: a chart of each team's running xG that the Director picks
+for momentum swings. [docs/plugins.md](docs/plugins.md) explains how to
+write one.
+
 ### Live feed (`api/`)
 
 `GET /api/live?home=harbourside&away=kingsmere&seed=9&speed=10` streams
@@ -172,9 +186,9 @@ The data formats are documented in [docs/schema.md](docs/schema.md).
 The live server also speaks the [Model Context Protocol](https://modelcontextprotocol.io)
 at `http://127.0.0.1:8000/mcp` (Streamable HTTP), so any MCP client
 (GitHub Copilot in VS Code, Claude, a Foundry agent) can ask about the
-match people are watching. It has 11 tools: `list_matches`, `get_score`,
+match people are watching. It has 12 tools: `list_matches`, `get_score`,
 `get_team_stats`, `get_player_stats`, `compare_players`, `top_players`,
-`get_recent_events`, `get_sequence`, `get_trend`, `get_on_screen` (what the
+`get_recent_events`, `get_sequence`, `get_trend`, `get_xg_race`, `get_on_screen` (what the
 agent team has shown, with its fact-checked stories) and `list_plugins`.
 Leave out `match_id` to ask about the match that started most recently.
 

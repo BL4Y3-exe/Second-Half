@@ -1,0 +1,14 @@
+{
+  "id": "xg-race",
+  "name": "xG race",
+  "version": "1.0.0",
+  "author": "Touchline Labs",
+  "builtin": false,
+  "entry": "index.html",
+  "slot": "lower-third",
+  "height_px": 150,
+  "moments": ["momentum_swing"],
+  "needs": ["xg_race"],
+  "default_duration_s": 8,
+  "description": "Example third-party plugin: each team's running xG total through the match, with goals marked. Runs in a sandbox with no network access."
+}

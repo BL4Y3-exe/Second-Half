@@ -1,5 +1,6 @@
 import { tr } from "../i18n";
 import { BUILTIN } from "../plugins/registry";
+import { Sandboxed } from "../plugins/Sandboxed";
 import type { Lang, Meta, Mode, Overlay, Side } from "../types";
 import type { OnAir } from "../useOverlaySchedule";
 
@@ -24,7 +25,7 @@ function headline(ov: Overlay, lang: Lang): string {
 
 function LowerThird({ item, meta, mode, lang }: { item: OnAir; meta: Meta; mode: Mode; lang: Lang }) {
   const ov = item.overlay;
-  const Plugin = BUILTIN[ov.plugin] ?? BUILTIN["stat-card"];
+  const Plugin = ov.plugin_info ? Sandboxed : (BUILTIN[ov.plugin] ?? BUILTIN["stat-card"]);
   const text = textFor(ov, lang, mode);
   const team = ov.team ? meta.teams[ov.team as Side] : null;
   return (

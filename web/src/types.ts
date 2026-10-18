@@ -123,6 +123,14 @@ export interface Telestrator {
   window: [number, number]; // match seconds the replay covers
 }
 
+export interface PluginInfo {
+  builtin: false;
+  name: string;
+  author: string;
+  entry: string; // URL of the plugin's page
+  height_px: number;
+}
+
 export interface Overlay {
   id: string;
   moment_id: string;
@@ -140,6 +148,7 @@ export interface Overlay {
   telestrator: Telestrator | null;
   facts_checked: boolean;
   fallback: boolean;
+  plugin_info?: PluginInfo; // set for outside plugins, which run sandboxed
   story: string;
   text: Record<string, Record<Mode, string>>;
 }

@@ -263,3 +263,21 @@ main { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; al
 .agent.persona { color: #d7a6ff; }
 .agent.analyst { color: #7fd1e8; }
 .agent.recap { color: #ff9ecb; }
+
+/* --- outside (sandboxed) plugins ----------------------------------------------------------------- */
+.sandboxed iframe { display: block; width: 100%; border: 0; background: transparent; margin-top: 4px; }
+.sandboxed .credit { display: block; margin-top: 2px; font-size: 10.5px; color: var(--muted); letter-spacing: 0.02em; }
+
+/* --- split screen -------------------------------------------------------------------------------- */
+.app.wide { max-width: 1920px; }
+.view-switch { margin-left: auto; }
+main.split-screen { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 340px; }
+@media (max-width: 1300px) { main.split-screen { grid-template-columns: 1fr; } }
+.pane { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.wide-pane { grid-column: span 2; }
+.pane .viewer { margin-bottom: 0; }
+.pane .seg button { padding: 4px 9px; font-size: 12.5px; }
+main.split-screen .lower-third { padding: 8px 12px 10px; }
+main.split-screen .lt-main { font-size: 21px; }
+main.split-screen .lt-text { font-size: 14px; }
+main.split-screen .trace > ol { max-height: calc(100vh - 200px); }

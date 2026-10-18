@@ -18,6 +18,12 @@ SEQUENCE_TYPES = {"pass", "carry", "shot", "goal", "possession_change", "interce
 TREND_METRICS = ("xg", "possession_pct", "control_chaos", "momentum", "field_tilt")
 
 
+def _minutes(clock: str, period: int) -> float:
+    mm, ss = clock.split(":")
+    minute = int(mm) + int(ss) / 60
+    return round(min(minute, 45.0) if period == 1 else minute, 2)
+
+
 def list_plugins() -> list[dict]:
     """Every installed graphics plugin's manifest."""
     out = []
@@ -101,6 +107,24 @@ class MatchTools:
         rows = [self.state.player_stats(p) for p in self.state.players]
         rows = [r for r in rows if isinstance(r.get(stat), (int, float))]
         return sorted(rows, key=lambda r: r[stat], reverse=True)[:n]
+
+    def get_xg_race(self) -> dict:
+        """Running xG total for each team, one point per shot, with goals marked. Minutes are clock minutes;
+        first-half stoppage time is drawn at 45."""
+        race: dict[str, list[dict]] = {"HOME": [], "AWAY": []}
+        totals = {"HOME": 0.0, "AWAY": 0.0}
+        for ev in self.state.events:
+            if ev["type"] != "shot" or ev.get("team") not in race:
+                continue
+            xg = float(ev.get("stats", {}).get("xg", 0.0))
+            totals[ev["team"]] += xg
+            race[ev["team"]].append({
+                "minute": _minutes(ev["clock"], ev["period"]), "xg": round(xg, 2),
+                "total": round(totals[ev["team"]], 2), "goal": ev.get("outcome") == "goal",
+                "player": self.state.players.get(ev["player"], {}).get("name", ""),
+            })
+        return {"now": _minutes(self.state.clock, self.state.period), "teams": race,
+                "totals": {s: round(v, 2) for s, v in totals.items()}}
 
     def get_recent_events(self, n: int = 10, types: list[str] | None = None) -> list[dict]:
         """The latest match events, newest last, optionally only some types (shot, goal, foul, ...)."""

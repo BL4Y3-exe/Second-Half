@@ -141,6 +141,12 @@ def build_server(source: MatchSource) -> MCPServer:
 
     @server.tool()
     @explain_errors
+    def get_xg_race(match_id: str | None = None) -> dict[str, Any]:
+        """Each team's running xG total through the match, one point per shot, with goals marked."""
+        return tools(match_id).get_xg_race()
+
+    @server.tool()
+    @explain_errors
     def get_on_screen(n: int = 5, match_id: str | None = None) -> list[dict[str, Any]]:
         """The graphics the agent team has put on screen most recently, with their fact-checked stories."""
         overlays = source.lookup(match_id).overlays[-max(1, min(n, 50)):]

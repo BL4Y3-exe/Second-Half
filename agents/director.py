@@ -6,7 +6,7 @@ geometry, and schedules items so graphics never pile up on top of each other.
 
 from __future__ import annotations
 
-from mcp_server import list_plugins
+from mcp_server import MatchTools, list_plugins
 
 from . import templates
 from .types import Facts, Moment
@@ -17,19 +17,32 @@ PLUGIN_FOR = {
     "recap": "recap-card",
 }
 MAX_QUEUE_S = 20.0  # wall seconds an item may wait for its slot before it is dropped (priority 2+)
+# What an outside plugin can ask for in its manifest's "needs", and the tool that answers it.
+NEEDS = {
+    "xg_race": lambda tools: tools.get_xg_race(),
+    "score": lambda tools: tools.get_score(),
+}
+
+
+def _count(n: int, word: str) -> str:
+    return f"{n} {word}" + ("" if n == 1 else "s")
 
 
 class Director:
     name = "director"
 
-    def __init__(self, speed: float):
+    def __init__(self, speed: float, tools: MatchTools | None = None):
         self.speed = speed
+        self.tools = tools
         self.plugins = {p["id"]: p for p in list_plugins()}
         self.busy_until: dict[str, float] = {}  # slot -> match time it frees up
         self._n = 0
 
     def direct(self, moment: Moment, facts: Facts, now: float, fallback: bool) -> tuple[dict | None, str]:
         plugin_id = "stat-card" if fallback and moment.kind != "recap" else PLUGIN_FOR.get(moment.kind, "stat-card")
+        outside = None if fallback else self._outside_plugin(moment.kind)
+        if outside is not None:
+            plugin_id = outside["id"]
         plugin = self.plugins[plugin_id]
         slot = plugin["slot"]
         duration = float(plugin["default_duration_s"])
@@ -54,14 +67,37 @@ class Director:
             "team": moment.team,
             "player": moment.player,
             "headline": self._headline(moment, facts),
-            "data": self._data(plugin_id, moment, facts),
+            "data": self._outside_data(plugin, facts) if outside else self._data(plugin_id, moment, facts),
             "telestrator": self._telestrator(moment, facts),
             "facts_checked": True,
             "fallback": fallback,
             "source_events": moment.source_events,
         }
+        if outside is not None:
+            item["plugin_info"] = {"builtin": False, "name": plugin["name"], "author": plugin["author"],
+                                   "entry": f"/plugins/{plugin['id']}/{plugin['entry']}",
+                                   "height_px": plugin.get("height_px", 150)}
         return item, f"{plugin['name']} in the {slot} slot for {duration:.0f} s" + (
-            f", Telestrator with {len(item['telestrator']['arrows'])} arrows" if item["telestrator"] else "")
+            f" (plugin by {plugin['author']}, sandboxed)" if outside else "") + (
+            f", Telestrator with {_count(len(item['telestrator']['arrows']), 'arrow')}" if item["telestrator"] else "")
+
+    def _outside_plugin(self, kind: str) -> dict | None:
+        """An installed third-party plugin made for this kind of moment, if its data can be supplied."""
+        if self.tools is None:
+            return None
+        for p in self.plugins.values():
+            if p.get("builtin") or not p.get("enabled", True) or kind not in p.get("moments", []):
+                continue
+            if all(need in NEEDS for need in p.get("needs", [])) and p.get("entry"):
+                return p
+        return None
+
+    def _outside_data(self, plugin: dict, facts: Facts) -> dict:
+        f = facts.values
+        data = {k: f[k] for k in ("team", "team_short", "momentum", "tilt_recent", "shots_recent") if k in f}
+        for need in plugin.get("needs", []):
+            data[need] = NEEDS[need](self.tools)
+        return data
 
     def _headline(self, moment: Moment, facts: Facts) -> str:
         f = facts.values

@@ -40,7 +40,7 @@ class Orchestrator:
         self.analyst = Analyst(self.tools)
         self.storyteller = Storyteller(self.model)
         self.checker = FactChecker(state.players)
-        self.director = Director(speed)
+        self.director = Director(speed, self.tools)
         self.persona = Persona(self.model, self.checker, languages)
         self.recap = Recap(self.model, self.tools)
         self.languages = languages

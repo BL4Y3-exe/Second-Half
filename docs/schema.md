@@ -124,6 +124,9 @@ One graphic the Director scheduled. Sent as the `overlay` SSE event.
   `stat-card` went out instead (`data.line` holds its text).
 - `text[lang][mode]` is the Persona agent's version for each viewer mode
   (`analyst`, `casual`, `player`) and language.
+- `plugin_info` is only present for an outside plugin, which the browser
+  runs sandboxed: `{"builtin": false, "name", "author", "entry", "height_px"}`.
+  See [plugins.md](plugins.md).
 
 ## Agent trace step
 
@@ -142,6 +145,9 @@ One handoff between agents. Sent as the `trace` SSE event.
 `moment_id` is then the trigger id).
 
 ## Graphics plugin manifest (`plugins/<id>/manifest.json`)
+
+Outside plugins add `entry`, `height_px`, `moments` and optionally `enabled`;
+see [plugins.md](plugins.md).
 
 ```json
 {"id": "goal-card", "name": "Goal card", "version": "1.0.0", "author": "Second Half", "builtin": true,

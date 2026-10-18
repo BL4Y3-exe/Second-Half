@@ -87,15 +87,15 @@ def test_wrong_drafts_are_caught_and_rewritten(match):
 
 
 def test_director_spaces_out_minor_graphics(match):
+    # Must-show items (goals, recaps) go straight on; the rest never overlap each other in a slot.
     _orch, published = match
     by_slot: dict[str, list[dict]] = {}
-    for d in (d for kind, d in published if kind == "overlay"):
+    for d in (d for kind, d in published if kind == "overlay" and d["priority"] > 1):
         by_slot.setdefault(d["slot"], []).append(d)
     for items in by_slot.values():
         items.sort(key=lambda d: d["show_at"])
         for prev, cur in zip(items, items[1:], strict=False):
-            if cur["priority"] > 1:
-                assert cur["show_at"] >= prev["show_at"] + prev["duration_s"] * 10 - 0.5
+            assert cur["show_at"] >= prev["show_at"] + prev["duration_s"] * 10 - 0.5
 
 
 def test_telestrator_geometry_is_on_the_pitch(match):
@@ -140,3 +140,23 @@ def test_match_tools(match):
     assert {"goal-card", "recap-card", "stat-card"} <= {m["id"] for m in manifests}
     for m in manifests:
         assert {"id", "name", "slot", "needs", "default_duration_s"} <= m.keys()
+
+
+def test_momentum_swings_use_the_sandboxed_outside_plugin(match):
+    _orch, published = match
+    swings = [d for kind, d in published if kind == "overlay" and d["kind"] == "momentum_swing" and not d["fallback"]]
+    assert swings
+    for d in swings:
+        assert d["plugin"] == "xg-race"
+        assert d["plugin_info"]["entry"] == "/plugins/xg-race/index.html"
+        race = d["data"]["xg_race"]
+        assert set(race["teams"]) == {"HOME", "AWAY"} and race["now"] > 0
+
+
+def test_director_falls_back_to_builtin_without_match_tools():
+    from agents.director import Director
+    from agents.types import Facts, Moment
+
+    moment = Moment("m-1", "momentum_swing", 600.0, "10:00", 2, "HOME", None, "Momentum", {})
+    item, _why = Director(speed=10).direct(moment, Facts("m-1", {"team_short": "HAR"}), now=600.0, fallback=False)
+    assert item["plugin"] == "momentum-bar" and "plugin_info" not in item

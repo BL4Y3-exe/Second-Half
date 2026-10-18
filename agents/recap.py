@@ -71,4 +71,5 @@ class Recap:
 
     async def write(self, moment: Moment, facts: Facts, lang: str) -> str:
         prompt = f"{moment.label}. Facts: {facts.values}. Language: {lang}."
-        return (await self.model.complete("recap", SYSTEM, prompt, {"facts": facts.values, "lang": lang})).strip()
+        context = {"facts": facts.values, "kind": "recap", "clock": moment.clock, "lang": lang}
+        return (await self.model.complete("recap", SYSTEM, prompt, context)).strip()

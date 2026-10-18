@@ -42,3 +42,18 @@ def test_hub_streams_a_live_match():
     seen = asyncio.run(watch())
     assert seen["meta"] == 1
     assert seen.get("event", 0) > 0
+
+
+def test_outside_plugins_are_served_locked_down():
+    r = client.get("/plugins/xg-race/index.html")
+    assert r.status_code == 200
+    csp = r.headers["content-security-policy"]
+    assert "default-src 'none'" in csp and "connect-src" not in csp  # no network: default-src covers fetch too
+    # Only an outside plugin's entry page is served: not manifests, not built-in plugins.
+    assert client.get("/plugins/xg-race/manifest.json").status_code == 404
+    assert client.get("/plugins/goal-card/index.html").status_code == 404
+
+
+def test_web_app_route_stays_inside_the_build_folder():
+    r = client.get("/..%2F..%2Fpyproject.toml")
+    assert "second-half" not in r.text

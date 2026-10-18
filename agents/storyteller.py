@@ -22,6 +22,7 @@ class Storyteller:
             prompt += "Your last draft was rejected by the fact-checker:\n- " + "\n- ".join(feedback) + "\n"
         text = await self.model.complete(
             "storyteller", SYSTEM, prompt,
-            {"facts": facts.values, "kind": moment.kind, "attempt": attempt, "feedback": feedback or []},
+            {"facts": facts.values, "kind": moment.kind, "clock": moment.clock, "attempt": attempt,
+             "feedback": feedback or []},
         )
         return Draft(moment.id, text.strip(), attempt)

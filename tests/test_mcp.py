@@ -10,7 +10,7 @@ from mcp_server.__main__ import OneMatch, play
 from mcp_server.server import build_server
 
 TOOLS = {"list_matches", "get_score", "get_team_stats", "get_player_stats", "compare_players", "top_players",
-         "get_recent_events", "get_sequence", "get_trend", "get_on_screen", "list_plugins"}
+         "get_recent_events", "get_sequence", "get_trend", "get_xg_race", "get_on_screen", "list_plugins"}
 HEADERS = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"}
 
 
