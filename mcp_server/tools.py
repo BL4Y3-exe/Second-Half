@@ -59,7 +59,7 @@ class MatchTools:
         events = self.state.events
         idx = next((i for i in range(len(events) - 1, -1, -1) if events[i]["id"] == event_id), None)
         if idx is None:
-            raise KeyError(f"no event {event_id}")
+            raise ValueError(f"no event {event_id}")
         target = events[idx]
         team = target.get("team")
         seq = []
@@ -102,6 +102,11 @@ class MatchTools:
         rows = [r for r in rows if isinstance(r.get(stat), (int, float))]
         return sorted(rows, key=lambda r: r[stat], reverse=True)[:n]
 
+    def get_recent_events(self, n: int = 10, types: list[str] | None = None) -> list[dict]:
+        """The latest match events, newest last, optionally only some types (shot, goal, foul, ...)."""
+        events = [e for e in self.state.events if not types or e["type"] in types]
+        return events[-max(1, min(n, 100)):]
+
     def list_plugins(self) -> list[dict]:
         """Installed graphics plugins the Director can put on screen."""
         return list_plugins()
@@ -114,12 +119,18 @@ class MatchTools:
             info = self.state.teams[side]
             if t.upper() == side or t.lower() in (info["name"].lower(), info["short"].lower(), info["key"]):
                 return side
-        raise KeyError(f"unknown team {team!r}")
+        raise ValueError(f"unknown team {team!r}")
 
     def _player_id(self, player: str) -> str:
+        """A player id from an id (h-09), a full name or an unambiguous last name."""
         if player in self.state.players:
             return player
+        wanted = player.strip().lower()
         for pid, info in self.state.players.items():
-            if info["name"].lower() == player.strip().lower():
+            if info["name"].lower() == wanted:
                 return pid
-        raise KeyError(f"unknown player {player!r}")
+        by_last = [pid for pid, info in self.state.players.items() if info["name"].split()[-1].lower() == wanted]
+        if len(by_last) == 1:
+            return by_last[0]
+        names = ", ".join(self.state.players[p]["name"] for p in by_last)
+        raise ValueError(f"{player!r} could be {names}" if by_last else f"unknown player {player!r}")

@@ -4,23 +4,55 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from mcp.server.transport_security import TransportSecuritySettings
 
+from mcp_server.server import build_server
 from simulator import CLUBS
 
-from .hub import MatchHub, MatchKey
+from .hub import HubSource, MatchHub, MatchKey
 
 ROOT = Path(__file__).resolve().parent.parent
 WEB_DIST = ROOT / "web" / "dist"
 
-app = FastAPI(title="Second Half", version="0.1.0")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 hub = MatchHub()
+mcp = build_server(HubSource(hub))
+
+
+def mcp_security() -> TransportSecuritySettings:
+    """Only accept MCP requests addressed to this machine, plus any public host names in MCP_ALLOWED_HOSTS
+    (comma-separated, e.g. the Azure Container Apps domain). Guards against DNS rebinding."""
+    extra = [h.strip() for h in os.environ.get("MCP_ALLOWED_HOSTS", "").split(",") if h.strip()]
+    local = ["127.0.0.1:*", "localhost:*", "[::1]:*"]
+    return TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=[*local, *extra],
+        allowed_origins=[*(f"http://{h}" for h in local), *(f"https://{h}" for h in extra)],
+    )
+
+
+# Streamable HTTP at /mcp. Stateless: each request stands alone, so it also works behind several replicas.
+mcp_http = mcp.streamable_http_app(streamable_http_path="/mcp", stateless_http=True, json_response=True,
+                                   transport_security=mcp_security())
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    async with mcp.session_manager.run():
+        yield
+
+
+app = FastAPI(title="Second Half", version="0.1.0", lifespan=lifespan)
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+app.router.routes.extend(mcp_http.routes)
 
 
 @app.get("/api/health")

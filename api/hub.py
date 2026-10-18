@@ -13,6 +13,7 @@ import time
 from dataclasses import dataclass, field
 
 from agents import Orchestrator
+from mcp_server.server import summary
 from simulator import MatchEngine, build_team
 from stats import MatchState
 
@@ -45,6 +46,11 @@ class LiveMatch:
     agents_task: asyncio.Task | None = None
     last_frame: dict | None = None
     finished: bool = False
+    started_at: float = field(default_factory=time.time)
+
+    @property
+    def overlays(self) -> list[dict]:
+        return self.orchestrator.overlays if self.orchestrator is not None else []
 
     def hello(self) -> list[tuple[str, dict]]:
         """What a new viewer needs before the live stream."""
@@ -157,3 +163,27 @@ class MatchHub:
             with contextlib.suppress(KeyError):
                 if self.matches[live.key] is live:
                     del self.matches[live.key]
+
+
+class HubSource:
+    """Lets the MCP server answer about the matches in the hub."""
+
+    def __init__(self, hub: MatchHub):
+        self.hub = hub
+
+    def _live(self) -> list[LiveMatch]:
+        return sorted(self.hub.matches.values(), key=lambda m: m.started_at)
+
+    def matches(self) -> list[dict]:
+        return [summary(m.key.id, m.state) for m in self._live()]
+
+    def lookup(self, match_id: str | None) -> LiveMatch:
+        live = self._live()
+        if not live:
+            raise ValueError("no match is running; open the web app (or GET /api/live) to start one")
+        if not match_id:
+            return live[-1]
+        for m in live:
+            if m.key.id == match_id:
+                return m
+        raise ValueError(f"no match {match_id!r}; running: {', '.join(m.key.id for m in live)}")

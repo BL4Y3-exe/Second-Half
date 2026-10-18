@@ -10,9 +10,9 @@ Built for the Microsoft *Inside the Game* developer hackathon. All clubs,
 players and matches are fictional.
 
 > **Status:** in progress. Done: match simulator, stats engine, live feed,
-> browser pitch view, and the agent team in mock mode with graphics
-> plugins, the Telestrator, viewer modes and the agent trace. Next: the MCP
-> endpoint, real models on Microsoft Foundry, and the Azure deployment.
+> browser pitch view, the agent team in mock mode with graphics plugins,
+> the Telestrator, viewer modes and the agent trace, and the MCP server.
+> Next: real models on Microsoft Foundry and the Azure deployment.
 
 ## Quickstart
 
@@ -149,7 +149,7 @@ client plugs in behind the same interface. The prompts are in
 **Match tools (`mcp_server/`).** What the Analyst and Recap agents can ask
 about the match: score, team and player stats, the sequence that led to an
 event, trends, comparisons, top players and the graphics plugins
-available. These are the tools the MCP server exposes.
+available. The MCP server below exposes the same tools to any MCP client.
 
 **Graphics plugins (`plugins/`).** Every graphic is a plugin with a
 manifest saying which stats it needs, which slot it uses (lower third,
@@ -166,6 +166,35 @@ snapshot every second), `overlay` (a graphic the Director scheduled),
 running match and one agent team.
 
 The data formats are documented in [docs/schema.md](docs/schema.md).
+
+### MCP server (`mcp_server/`)
+
+The live server also speaks the [Model Context Protocol](https://modelcontextprotocol.io)
+at `http://127.0.0.1:8000/mcp` (Streamable HTTP), so any MCP client
+(GitHub Copilot in VS Code, Claude, a Foundry agent) can ask about the
+match people are watching. It has 11 tools: `list_matches`, `get_score`,
+`get_team_stats`, `get_player_stats`, `compare_players`, `top_players`,
+`get_recent_events`, `get_sequence`, `get_trend`, `get_on_screen` (what the
+agent team has shown, with its fact-checked stories) and `list_plugins`.
+Leave out `match_id` to ask about the match that started most recently.
+
+**VS Code:** this repo includes `.vscode/mcp.json`, so with `python -m api`
+running and a match open in the browser, start the `second-half` server
+from the MCP view and ask Copilot Chat (agent mode) things like "who has
+the highest xG so far?" or "how did the last goal come about?".
+
+**Any other client:** point it at `http://127.0.0.1:8000/mcp`, or run a
+replay over stdio without the web app (it plays the match to the minute
+given, then answers about it):
+
+```bash
+python -m mcp_server --seed 9 --minute 60
+```
+
+When the server runs under a public host name (for example on Azure
+Container Apps), list that name in `MCP_ALLOWED_HOSTS` (comma-separated).
+Requests addressed to any other host are refused, which guards against DNS
+rebinding.
 
 ## Development
 
