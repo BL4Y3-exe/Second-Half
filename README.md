@@ -10,9 +10,9 @@ Built for the Microsoft *Inside the Game* developer hackathon. All clubs,
 players and matches are fictional.
 
 > **Status:** in progress. Done: match simulator, stats engine, live feed,
-> browser pitch view, the agent team in mock mode with graphics plugins,
-> the Telestrator, viewer modes and the agent trace, and the MCP server.
-> Next: real models on Microsoft Foundry and the Azure deployment.
+> browser pitch view, the agent team with graphics plugins (on Microsoft
+> Foundry or a built-in mock model), the Telestrator, viewer modes and the
+> agent trace, and the MCP server. Next: the Azure deployment.
 
 ## Quickstart
 
@@ -50,10 +50,10 @@ by side, each with their own mode, language and club, next to the agent
 trace. By default it is an English-speaking analyst and a Spanish-speaking
 casual Kingsmere fan. It is laid out for a 1920x1080 screen recording.
 
-No Azure account or API key is needed: the agents run on a built-in mock
-model that writes from templates and deliberately slips a wrong number into
-some first drafts (always including the first goal's), so you can watch the
-Fact-checker catch it.
+No Azure account or API key is needed: unless you set up Microsoft Foundry
+(below), the agents run on a built-in mock model that writes from templates
+and deliberately slips a wrong number into some first drafts (always
+including the first goal's), so you can watch the Fact-checker catch it.
 
 You can link straight to a set-up, which is handy for demos:
 `http://127.0.0.1:8000/?seed=12&speed=20&mode=casual&lang=es&fav=HOME&tab=trace`,
@@ -62,6 +62,46 @@ or `http://127.0.0.1:8000/?view=split` for the split screen.
 **Working on the web app?** Run `python -m api` in one terminal and
 `npm run dev` inside `web/` in another, then open http://localhost:5173.
 Changes reload instantly.
+
+## Running the agents on Microsoft Foundry
+
+The Storyteller, Persona and Recap agents can write with a real model
+deployed in [Microsoft Foundry](https://ai.azure.com). Sign-in uses
+Microsoft Entra ID, so there are no API keys to keep.
+
+1. In the Foundry portal, create a project and deploy a model, for example
+   `gpt-5.4-mini` (Global Standard). Creating the project in the portal
+   gives you the **Foundry User** role, which is what the app needs.
+2. Install the [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli)
+   and run `az login`.
+3. Copy `.env.example` to `.env` and fill in the project endpoint (from the
+   project's overview page) and the deployment name:
+
+   ```bash
+   FOUNDRY_PROJECT_ENDPOINT=https://<resource>.services.ai.azure.com/api/projects/<project>
+   FOUNDRY_MODEL=gpt-5.4-mini
+   ```
+
+4. Check it works on the first half hour of a match, then start the server
+   as usual:
+
+   ```bash
+   python -m agents --model foundry --until 30 --trace
+   python -m api
+   ```
+
+The agent trace shows which model is writing (the chip next to its title).
+Models from the gpt-5 family think before they answer; the app asks for
+`low` effort by default. For the quickest lines set
+`FOUNDRY_REASONING_EFFORT=minimal` (gpt-5, gpt-5-mini, gpt-5-nano) or
+`none` (gpt-5.1 and later). For a model without reasoning, leave it empty
+(`FOUNDRY_REASONING_EFFORT=`).
+
+Live TV can't wait for a slow model, so every call has a 20-second limit.
+If the model doesn't answer, the Storyteller's moment goes out as a plain
+stat card, and a Persona or Recap version falls back to the scripted line
+built from the same facts. Minor moments the team only reaches after 25
+seconds are dropped. All of this shows up in the trace.
 
 ## Command line
 
@@ -87,6 +127,7 @@ python -m stats --seed 9
 python -m agents --seed 9
 python -m agents --seed 9 --trace              # every handoff, rejected drafts marked x
 python -m agents --seed 9 --mode casual --lang es
+python -m agents --model foundry --until 30    # on Microsoft Foundry (see above), first 30 minutes
 ```
 
 Clubs: `harbourside`, `kingsmere`, `ashford`, `northgate` (`--home`,
@@ -143,15 +184,17 @@ Seven agents work each key moment in turn:
 | Spotter | Watches the stats engine's triggers, merges ones that belong together (a shot and its goal) and holds back minor moments so the screen isn't cluttered. |
 | Analyst | Looks up the facts with the match tools: the passage of play, xG, speeds, the player's and team's numbers. |
 | Storyteller | Writes one or two sentences on why the moment matters, using only those facts. |
-| Fact-checker | Plain code, no AI. Every number and player name in the draft must match match state. If not, it sends the draft back with the reason; after two failures a plain stat card goes out instead. |
+| Fact-checker | Plain code, no AI. Every number and player name in the draft must match match state. If not, it sends the draft back with the reason; after two failures (or if the model doesn't answer) a plain stat card goes out instead. |
 | Director | Picks the graphics plugin and slot, builds the Telestrator drawing from real event positions, and schedules items so graphics never pile up. |
-| Persona | Rewrites the approved story for each viewer mode and language; each version is fact-checked again. |
+| Persona | Rewrites the approved story for each viewer mode and language, all at once; each version is fact-checked again, and one that fails falls back to a scripted line built from the facts. |
 | Recap | Writes the half-time and full-time summaries with player ratings. |
 
 The agents talk to a model through one small interface
-(`agents/models.py`). The default is the mock model; the Microsoft Foundry
-client plugs in behind the same interface. The prompts are in
-`agents/prompts/`.
+(`agents/models.py`). With Foundry configured, the Storyteller, Persona and
+Recap each run as a [Microsoft Agent Framework](https://learn.microsoft.com/agent-framework/)
+agent on a shared Foundry chat client (`agents/foundry.py`); otherwise
+they use the mock model. The other four agents are plain code. The
+prompts are in `agents/prompts/`.
 
 **Match tools (`mcp_server/`).** What the Analyst and Recap agents can ask
 about the match: score, team and player stats, the sequence that led to an

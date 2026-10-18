@@ -71,7 +71,7 @@ export default function App() {
     return s;
   }, [meta, events]);
 
-  const caught = trace.filter((s) => s.status === "rejected").length;
+  const caught = trace.filter((s) => s.agent === "fact_checker" && s.status === "rejected").length;
   const lastEvent = events[events.length - 1];
   const clock = snapshot?.clock ?? lastEvent?.clock ?? "00:00";
   const kickOff = () => setReq({ ...form, run: (req?.run ?? 0) + 1 });

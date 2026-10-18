@@ -37,7 +37,9 @@ function LowerThird({ item, meta, mode, lang }: { item: OnAir; meta: Meta; mode:
         <span className="lt-tag">{headline(ov, lang)}</span>
         <span className="lt-clock">{ov.clock}</span>
         <span className={`lt-check${ov.fallback ? " warn" : ""}`}>
-          {ov.fallback ? tr(lang, "stat_card") : `✓ ${tr(lang, "fact_checked")}`}
+          {ov.fallback
+            ? tr(lang, ov.fallback_reason === "no_answer" ? "stat_card_no_answer" : "stat_card")
+            : `✓ ${tr(lang, "fact_checked")}`}
         </span>
       </div>
       <div className="lt-body">

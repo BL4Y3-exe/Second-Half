@@ -11,7 +11,8 @@ import re
 
 from .types import Facts, Verdict
 
-NUMBER = re.compile(r"(?<![\w.])(\d+(?:\.\d+)?)(?![\d])\s*(km/h|km|xG|m\b|%|'|difficulty)?")
+# A decimal comma counts too ("0,45 xG" in Spanish).
+NUMBER = re.compile(r"(?<![\w.,])(\d+(?:[.,]\d+)?)(?![\d])\s*(km/h|km|xG|m\b|%|'|difficulty)?")
 # What kind of fact a number with this unit should match (by fact-name suffix or substring).
 UNIT_KEYS = {"km/h": ("_kmh",), "km": ("_km",), "xG": ("xg",), "m": ("_m",), "%": ("pct", "tilt", "completion", "poss"),
              "'": ("minute",), "difficulty": ("difficulty",)}
@@ -28,17 +29,19 @@ class FactChecker:
 
     def check(self, text: str, facts: Facts) -> Verdict:
         numbers = facts.numbers()
-        names = {v for v in facts.values.values() if isinstance(v, str)}
+        names = set(_strings(facts.values))
         checked: list[str] = []
         problems: list[str] = []
 
         for m in NUMBER.finditer(text):
             raw, unit = m.group(1), (m.group(2) or "").strip()
-            value = float(raw)
-            decimals = len(raw.split(".")[1]) if "." in raw else 0
+            value = float(raw.replace(",", "."))
+            decimals = len(re.split("[.,]", raw)[1]) if re.search("[.,]", raw) else 0
             tol = 0.5 * 10 ** -decimals + 1e-9
             checked.append(raw + (f" {unit}" if unit else ""))
             if any(abs(value - round(v, decimals)) <= tol for v in numbers.values()):
+                continue
+            if "," in raw and float(raw.replace(",", "")) in numbers.values():  # "1,250" as a thousands separator
                 continue
             expected = self._expected(unit, value, numbers, decimals)
             problems.append(f"says {raw}{' ' + unit if unit else ''}, but match data has "
@@ -61,3 +64,15 @@ class FactChecker:
             return None
         k, v = min(candidates, key=lambda kv: abs(kv[1] - value))
         return f"{v:.{decimals}f}{' ' + unit if unit and unit != chr(39) else ''} ({k})"
+
+
+def _strings(value: object):
+    """Every string in the facts, including inside lists and dicts (the recap's ratings and goals)."""
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, dict):
+        for v in value.values():
+            yield from _strings(v)
+    elif isinstance(value, (list, tuple)):
+        for v in value:
+            yield from _strings(v)

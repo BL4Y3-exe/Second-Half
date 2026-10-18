@@ -24,6 +24,7 @@ const WORDS = {
   final_third: { en: "Final-third passes, last 5 min", es: "Pases en el último tercio, últimos 5 min" },
   fact_checked: { en: "Fact-checked", es: "Verificado" },
   stat_card: { en: "Plain stats: the story failed fact-checking", es: "Solo datos: la historia no pasó la verificación" },
+  stat_card_no_answer: { en: "Plain stats: no story in time", es: "Solo datos: sin historia a tiempo" },
   replay: { en: "Replay", es: "Repetición" },
   stat: { en: "Stat", es: "Dato" },
   easy: { en: "easy", es: "fácil" },

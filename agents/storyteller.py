@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from .models import ModelClient
@@ -17,7 +18,9 @@ class Storyteller:
         self.model = model
 
     async def write(self, moment: Moment, facts: Facts, attempt: int, feedback: list[str] | None = None) -> Draft:
-        prompt = f"Moment: {moment.label} ({moment.kind}, {moment.clock}).\nFacts: {facts.values}\n"
+        # No clock: "42:58" would put two numbers in the story that aren't facts (the minute is one).
+        facts_json = json.dumps(facts.for_model(), ensure_ascii=False)
+        prompt = f"Moment: {moment.label} ({moment.kind}).\nFacts: {facts_json}\n"
         if feedback:
             prompt += "Your last draft was rejected by the fact-checker:\n- " + "\n- ".join(feedback) + "\n"
         text = await self.model.complete(

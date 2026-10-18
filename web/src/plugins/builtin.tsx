@@ -109,8 +109,9 @@ export function MomentumBar({ overlay, meta, lang }: PluginProps) {
   );
 }
 
-export function StatCard({ overlay }: PluginProps) {
-  return <div className="lt-main lt-line">{str(overlay.data.line)}</div>;
+export function StatCard({ overlay, lang }: PluginProps) {
+  const line = (lang === "es" && str(overlay.data.line_es)) || str(overlay.data.line);
+  return <div className="lt-main lt-line">{line}</div>;
 }
 
 /** Corner caption that goes with a player pinned on the pitch. */

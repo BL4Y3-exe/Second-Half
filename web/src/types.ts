@@ -148,6 +148,7 @@ export interface Overlay {
   telestrator: Telestrator | null;
   facts_checked: boolean;
   fallback: boolean;
+  fallback_reason?: "fact_check" | "no_answer"; // why a plain stat card went out instead of a story
   plugin_info?: PluginInfo; // set for outside plugins, which run sandboxed
   story: string;
   text: Record<string, Record<Mode, string>>;

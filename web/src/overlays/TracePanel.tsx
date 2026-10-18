@@ -30,12 +30,20 @@ function group(trace: TraceStep[]): Moment[] {
   return [...byId.values()].reverse();
 }
 
+const caught = (s: TraceStep) => s.agent === "fact_checker" && s.status === "rejected";
+
+function duration(ms: number): string {
+  return ms >= 1000 ? `${(ms / 1000).toFixed(1)} s` : `${Math.round(ms)} ms`;
+}
+
 function outcome(m: Moment): { text: string; cls: string } {
   const last = m.steps[m.steps.length - 1];
   if (m.steps[0].action === "passed over") return { text: "passed over", cls: "skipped" };
-  if (m.steps.some((s) => s.action === "dropped")) return { text: "held back", cls: "skipped" };
+  const dropped = m.steps.find((s) => s.action === "dropped");
+  if (dropped) return { text: dropped.summary.startsWith("too late") ? "too late" : "held back", cls: "skipped" };
   if (m.steps.some((s) => s.status === "fallback")) return { text: "stat card", cls: "fallback" };
-  if (m.steps.some((s) => s.status === "rejected")) return { text: "caught & fixed", cls: "rejected" };
+  if (m.steps.some((s) => s.action === "no answer")) return { text: "scripted line", cls: "fallback" };
+  if (m.steps.some(caught)) return { text: "caught & fixed", cls: "rejected" };
   if (last.agent === "persona" || last.action === "scheduled") return { text: "on air", cls: "ok" };
   return { text: "working…", cls: "pending" };
 }
@@ -48,9 +56,9 @@ export function TracePanel({ meta, trace }: { meta: Meta; trace: TraceStep[] }) 
   const totals: [string, number, string][] = [
     ["moments", count((s) => s.action === "flagged"), ""],
     ["approved first time", firstTime, "ok"],
-    ["wrong numbers caught", count((s) => s.status === "rejected"), "rejected"],
+    ["wrong numbers caught", count(caught), "rejected"],
     ["stat-card fallbacks", count((s) => s.status === "fallback"), "fallback"],
-    ["held back to avoid clutter", count((s) => s.status === "skipped"), "skipped"],
+    ["held back", count((s) => s.status === "skipped"), "skipped"],
   ];
   return (
     <div className="panel trace">
@@ -81,7 +89,7 @@ export function TracePanel({ meta, trace }: { meta: Meta; trace: TraceStep[] }) 
                     <span className={`agent ${s.agent}`}>{AGENTS[s.agent] ?? s.agent}</span>
                     <span className="action">{s.action}</span>
                     <span className="summary">{s.summary}</span>
-                    {s.ms >= 1 && <span className="ms">{Math.round(s.ms)} ms</span>}
+                    {s.ms >= 1 && <span className="ms">{duration(s.ms)}</span>}
                   </li>
                 ))}
               </ol>

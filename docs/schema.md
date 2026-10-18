@@ -120,8 +120,9 @@ One graphic the Director scheduled. Sent as the `overlay` SSE event.
 - `telestrator` is null when the moment has no geometry. Arrow `kind` is
   `pass`, `carry` or `shot`; `t` is when it happened, and `window` is the
   stretch of play the browser replays under the drawing.
-- `fallback` is true when the story failed fact-checking twice and a plain
-  `stat-card` went out instead (`data.line` holds its text).
+- `fallback` is true when the story failed fact-checking twice, or the model
+  didn't answer, and a plain `stat-card` went out instead (`data.line` and
+  `data.line_es` hold its text). `fallback_reason` then says which: `fact_check` or `no_answer`.
 - `text[lang][mode]` is the Persona agent's version for each viewer mode
   (`analyst`, `casual`, `player`) and language.
 - `plugin_info` is only present for an outside plugin, which the browser
@@ -141,8 +142,10 @@ One handoff between agents. Sent as the `trace` SSE event.
 
 `agent` is one of `spotter`, `analyst`, `storyteller`, `fact_checker`,
 `director`, `persona`, `recap`. `status` is `ok`, `rejected`, `fallback` or
-`skipped` (a moment the Spotter passed over or the Director held back; its
-`moment_id` is then the trigger id).
+`skipped` (a moment the Spotter passed over or the Director held back or
+dropped as too late; for one the Spotter passed over, `moment_id` is the
+trigger id). A model call that failed or timed out is traced with the action
+`no answer` and status `rejected`.
 
 ## Graphics plugin manifest (`plugins/<id>/manifest.json`)
 

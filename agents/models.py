@@ -1,16 +1,18 @@
 """Model clients. Agents talk to a model through `ModelClient.complete`.
 
 `MockModel` runs everything locally with scripted, realistic text so the
-whole studio works without Azure keys. A Microsoft Foundry client plugs in
-behind the same interface.
+whole studio works without Azure. `FoundryModel` (agents/foundry.py) writes
+with a model deployed in Microsoft Foundry, behind the same interface.
 """
 
 from __future__ import annotations
 
+import functools
 import random
 from typing import Protocol
 
 from . import templates
+from .settings import foundry_settings
 
 
 class ModelClient(Protocol):
@@ -51,3 +53,56 @@ class MockModel:
         if agent == "recap":
             return templates.recap(context, self._rng(context, "recap", context.get("lang")))
         raise ValueError(f"mock model has no script for agent {agent!r}")
+
+
+@functools.cache
+def _foundry(endpoint: str, model: str, reasoning_effort: str) -> ModelClient:
+    from .foundry import FoundryModel  # only needs the Azure packages when Foundry is configured
+
+    return FoundryModel(endpoint, model, reasoning_effort)
+
+
+def load_model(seed: int = 0, use: str = "auto") -> ModelClient:
+    """The model the writing agents use. "auto" picks Foundry when FOUNDRY_PROJECT_ENDPOINT and FOUNDRY_MODEL
+    are set, the scripted mock otherwise. Every match shares one Foundry client; each gets its own mock."""
+    settings = foundry_settings()
+    if use == "foundry" and settings is None:
+        raise ValueError("set FOUNDRY_PROJECT_ENDPOINT and FOUNDRY_MODEL (in the environment or .env) to use Foundry")
+    if use == "mock" or settings is None:
+        return MockModel(seed=seed)
+    return _foundry(settings["endpoint"], settings["model"], settings["reasoning_effort"])
+
+
+def _root_cause(exc: BaseException) -> BaseException:
+    """Agent Framework wraps the real error (a sign-in or HTTP failure); dig it out."""
+    seen: set[int] = set()
+    while id(exc) not in seen:
+        seen.add(id(exc))
+        inner = next((a for a in exc.args if isinstance(a, BaseException)), None) or exc.__cause__
+        if inner is None:
+            break
+        exc = inner
+    return exc
+
+
+def explain_failure(exc: BaseException) -> str:
+    """A short reason a model call failed, with what to check when it is a set-up problem."""
+    if isinstance(exc, TimeoutError):
+        return "the model took too long to answer"
+    root = _root_cause(exc)
+    name = type(root).__name__
+    detail = (str(root).splitlines() or [""])[0][:140]
+    status = getattr(root, "status_code", None)
+    if name in ("CredentialUnavailableError", "ClientAuthenticationError"):
+        return f"can't sign in to Azure ({detail}); run az login"
+    if status in (401, 403):
+        return f"Foundry refused the sign-in ({status}); the account needs the Foundry User role on the resource"
+    if status == 404:
+        return "Foundry answered 404; check FOUNDRY_MODEL is the deployment name and the endpoint is the project's"
+    if status == 429:
+        return "Foundry rate limit (429): the deployment's tokens-per-minute quota is used up for now"
+    if status == 400 and "reasoning" in detail.lower():
+        return "this model doesn't take a reasoning effort; set FOUNDRY_REASONING_EFFORT= (empty)"
+    if name == "APIConnectionError":
+        return "can't reach Foundry; check FOUNDRY_PROJECT_ENDPOINT"
+    return f"model call failed: {name}" + (f" ({detail})" if detail else "")

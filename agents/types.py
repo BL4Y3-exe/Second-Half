@@ -33,6 +33,13 @@ class Facts:
     def numbers(self) -> dict[str, float]:
         return {k: float(v) for k, v in self.values.items() if isinstance(v, (int, float)) and not isinstance(v, bool)}
 
+    def for_model(self) -> dict:
+        """The facts as a model sees them: without the helpers the scripted templates use (plural words,
+        Spanish snippets, flattened copies of the recap lists), which only add noise to a prompt."""
+        helper_prefixes = ("goals_line", "rating_", "goal_minute_", "goal_scorer_")
+        return {k: v for k, v in self.values.items()
+                if not k.endswith(("_word", "_es")) and not k.startswith(helper_prefixes)}
+
 
 @dataclass
 class Draft:

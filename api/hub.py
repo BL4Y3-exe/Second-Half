@@ -13,6 +13,7 @@ import time
 from dataclasses import dataclass, field
 
 from agents import Orchestrator
+from agents.models import load_model
 from mcp_server.server import summary
 from simulator import MatchEngine, build_team
 from stats import MatchState
@@ -20,6 +21,7 @@ from stats import MatchState
 FRAME_RATE = 12.0  # position frames per wall-clock second sent to viewers
 STATS_EVERY_S = 1.0  # wall-clock seconds between stats snapshots
 KEEP_FINISHED_S = 60.0  # keep a finished match around briefly for late viewers
+FINISH_RECAP_S = 45.0  # longest the full-time whistle waits for the agent team to finish
 
 
 @dataclass(frozen=True)
@@ -80,18 +82,19 @@ class MatchHub:
             return live
         home, away = build_team(key.home, "HOME"), build_team(key.away, "AWAY")
         engine = MatchEngine(home, away, seed=key.seed, frame_step=0.1)
+        model = load_model(key.seed)
         meta = {
             "match_id": key.id,
             "seed": key.seed,
             "speed": key.speed,
             "pitch": [105.0, 68.0],
             "teams": {"HOME": home.to_dict(), "AWAY": away.to_dict()},
-            "model": "mock",
+            "model": model.name,
             "languages": ["en", "es"],
         }
         state = MatchState(meta)
         live = LiveMatch(key, engine, state, meta)
-        live.orchestrator = Orchestrator(state, live.publish, speed=key.speed, seed=key.seed,
+        live.orchestrator = Orchestrator(state, live.publish, speed=key.speed, model=model, seed=key.seed,
                                          languages=tuple(meta["languages"]))
         live.agents_task = asyncio.create_task(live.orchestrator.run())
         live.task = asyncio.create_task(self._run(live))
@@ -133,9 +136,8 @@ class MatchHub:
                 await asyncio.sleep(0)  # let viewers drain when running flat out
         if orch is not None:
             orch.flush(live.state.t)
-            while not orch.queue.empty():  # let the team finish the recap
-                await asyncio.sleep(0.05)
-            await asyncio.sleep(0.2)
+            with contextlib.suppress(TimeoutError):  # let the team finish the full-time recap before "end"
+                await asyncio.wait_for(orch.queue.join(), timeout=FINISH_RECAP_S)
         live.finished = True
         live.publish("end", {"score": live.state.score})
         await asyncio.sleep(KEEP_FINISHED_S)

@@ -123,6 +123,7 @@ def test_story_that_keeps_failing_becomes_a_stat_card():
     overlays = [d for kind, d in published if kind == "overlay" and d["kind"] != "recap"]
     assert overlays and orch.stats["fallbacks"] == len(overlays)
     assert all(d["fallback"] and d["plugin"] == "stat-card" for d in overlays)
+    assert all(d["fallback_reason"] == "fact_check" for d in overlays)
     assert all("999" not in d["story"] for d in overlays)
 
 

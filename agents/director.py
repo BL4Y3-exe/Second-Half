@@ -17,6 +17,7 @@ PLUGIN_FOR = {
     "recap": "recap-card",
 }
 MAX_QUEUE_S = 20.0  # wall seconds an item may wait for its slot before it is dropped (priority 2+)
+MAX_LATE_S = 25.0  # wall seconds after a moment when it is no longer worth showing (priority 2+)
 # What an outside plugin can ask for in its manifest's "needs", and the tool that answers it.
 NEEDS = {
     "xg_race": lambda tools: tools.get_xg_race(),
@@ -38,7 +39,17 @@ class Director:
         self.busy_until: dict[str, float] = {}  # slot -> match time it frees up
         self._n = 0
 
+    def too_late(self, moment: Moment, now: float) -> str | None:
+        """Why a moment is no longer news, or None. Goals and recaps always go out."""
+        late_wall = (now - moment.t) / self.speed
+        if moment.priority > 1 and late_wall > MAX_LATE_S:
+            return f"too late: it happened {late_wall:.0f} s ago"
+        return None
+
     def direct(self, moment: Moment, facts: Facts, now: float, fallback: bool) -> tuple[dict | None, str]:
+        late = self.too_late(moment, now)
+        if late:
+            return None, late
         plugin_id = "stat-card" if fallback and moment.kind != "recap" else PLUGIN_FOR.get(moment.kind, "stat-card")
         outside = None if fallback else self._outside_plugin(moment.kind)
         if outside is not None:
@@ -127,6 +138,7 @@ class Director:
         data = {k: f[k] for k in keep if k in f}
         if plugin_id == "stat-card":
             data["line"] = templates.fallback(moment.kind, f)
+            data["line_es"] = templates.fallback(moment.kind, f, "es")
         if plugin_id == "recap-card":
             data["ratings"] = f.get("ratings", [])
             data["goals"] = f.get("goals", [])

@@ -15,6 +15,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from mcp.server.transport_security import TransportSecuritySettings
 
+from agents.settings import load_env
 from mcp_server import list_plugins
 from mcp_server.server import build_server
 from simulator import CLUBS
@@ -24,6 +25,7 @@ from .hub import HubSource, MatchHub, MatchKey
 ROOT = Path(__file__).resolve().parent.parent
 WEB_DIST = ROOT / "web" / "dist"
 
+load_env()  # FOUNDRY_* and MCP_ALLOWED_HOSTS may come from a .env file in the project root
 hub = MatchHub()
 mcp = build_server(HubSource(hub))
 

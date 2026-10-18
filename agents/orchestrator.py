@@ -8,6 +8,7 @@ a trace step so the app can show the team at work.
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from collections.abc import Callable
 
@@ -18,7 +19,7 @@ from . import templates
 from .analyst import Analyst
 from .director import Director
 from .fact_checker import FactChecker
-from .models import MockModel, ModelClient
+from .models import MockModel, ModelClient, explain_failure
 from .persona import MODES, Persona
 from .recap import Recap
 from .spotter import Spotter
@@ -27,6 +28,7 @@ from .types import Moment, TraceStep
 
 Publish = Callable[[str, dict], None]
 MAX_RETRIES = 2
+log = logging.getLogger(__name__)
 
 
 class Orchestrator:
@@ -73,11 +75,19 @@ class Orchestrator:
     async def run(self) -> None:
         while True:
             moment = await self.queue.get()
-            await self.handle(moment)
+            try:
+                await self.handle(moment)
+            except Exception:  # one bad moment must not take the commentary off air for the rest of the match
+                log.exception("the agent team failed on %s", moment.id)
+            finally:
+                self.queue.task_done()
 
     async def drain(self) -> None:
         while not self.queue.empty():
-            await self.handle(self.queue.get_nowait())
+            try:
+                await self.handle(self.queue.get_nowait())
+            finally:
+                self.queue.task_done()
 
     # --- the pipeline -------------------------------------------------------------
 
@@ -88,6 +98,12 @@ class Orchestrator:
         if m.kind == "recap":
             return await self._handle_recap(m)
 
+        late = self.director.too_late(m, self.state.t)
+        if late:  # the team fell behind (a slow model, a burst of moments): skip what is no longer news
+            self.stats["dropped"] += 1
+            self._trace(m.t, m.clock, m.id, "director", "dropped", late, status="skipped")
+            return None
+
         started = time.perf_counter()
         facts = self.analyst.analyse(m)
         self._trace(m.t, m.clock, m.id, "analyst", "looked up",
@@ -96,9 +112,18 @@ class Orchestrator:
 
         approved: str | None = None
         feedback: list[str] | None = None
+        why_fallback = "Story failed fact-checking twice, so a plain stat card goes out instead"
+        fallback_reason = "fact_check"
         for attempt in range(1, MAX_RETRIES + 2):
             started = time.perf_counter()
-            draft = await self.storyteller.write(m, facts, attempt, feedback)
+            try:
+                draft = await self.storyteller.write(m, facts, attempt, feedback)
+            except Exception as exc:  # timeout, quota, network: live TV can't wait, so fall back
+                self._trace(m.t, m.clock, m.id, "storyteller", "no answer", explain_failure(exc), status="rejected",
+                            ms=self._ms(started))
+                why_fallback = "The model didn't answer, so a plain stat card goes out instead"
+                fallback_reason = "no_answer"
+                break
             self._trace(m.t, m.clock, m.id, "storyteller", "drafted" if attempt == 1 else f"redrafted ({attempt})",
                         draft.text, ms=self._ms(started), detail={"attempt": attempt})
             verdict = self.checker.check(draft.text, facts)
@@ -119,8 +144,7 @@ class Orchestrator:
         if fallback:
             self.stats["fallbacks"] += 1
             approved = templates.fallback(m.kind, facts.values)
-            self._trace(m.t, m.clock, m.id, "director", "fallback",
-                        "Story failed fact-checking twice, so a plain stat card goes out instead", status="fallback")
+            self._trace(m.t, m.clock, m.id, "director", "fallback", why_fallback, status="fallback")
 
         item, why = self.director.direct(m, facts, self.state.t, fallback)
         if item is None:
@@ -134,27 +158,39 @@ class Orchestrator:
         texts, notes = await self.persona.render(m, facts, approved)
         self._trace(m.t, m.clock, m.id, "persona", "rewrote",
                     f"{len(MODES)} viewer modes in {', '.join(self.languages)}"
-                    + (f"; {len(notes)} kept the approved text" if notes else ""),
+                    + (f"; {len(notes)} fell back to the scripted line" if notes else ""),
                     ms=self._ms(started), detail={"notes": notes})
         item["story"] = approved
         item["text"] = texts
+        if fallback:
+            item["fallback_reason"] = fallback_reason
         return self._emit(item)
 
     async def _handle_recap(self, m: Moment) -> dict | None:
         facts = self.recap.facts(m)
-        texts: dict[str, dict[str, str]] = {}
-        for lang in self.languages:
-            text = await self.recap.write(m, facts, lang)
+
+        async def write(lang: str) -> str:
+            started = time.perf_counter()
+            try:
+                text = await self.recap.write(m, facts, lang)
+            except Exception as exc:  # fall back to the scripted recap, built from the same facts
+                self._trace(m.t, m.clock, m.id, "recap", "no answer", explain_failure(exc), status="rejected",
+                            ms=self._ms(started))
+                return self.recap.scripted(m, facts, lang)
             verdict = self.checker.check(text, facts)
             if not verdict.approved:
                 self._trace(m.t, m.clock, m.id, "fact_checker", "rejected", "; ".join(verdict.problems),
                             status="rejected")
-                text = templates.fallback("recap", facts.values)
-            texts[lang] = {mode: text for mode in MODES}
+                return self.recap.scripted(m, facts, lang)
+            return text
+
+        started = time.perf_counter()
+        written = await asyncio.gather(*(write(lang) for lang in self.languages))
+        texts = {lang: {mode: text for mode in MODES} for lang, text in zip(self.languages, written, strict=True)}
         self._trace(m.t, m.clock, m.id, "recap", "summarised",
                     f"{facts.values['home_short']} {facts.values['score_home']}-{facts.values['score_away']} "
                     f"{facts.values['away_short']}, top rated {facts.values['best_player']} "
-                    f"({facts.values['best_rating']:.1f})")
+                    f"({facts.values['best_rating']:.1f})", ms=self._ms(started))
         item, why = self.director.direct(m, facts, self.state.t, fallback=False)
         if item is None:
             return None

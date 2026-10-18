@@ -74,6 +74,16 @@ FALLBACK: dict[str, str] = {
     "distance_10k": "{player}: {distance_km} km covered.",
     "recap": "{home_short} {score_home}-{score_away} {away_short}. xG {home_xg:.2f} - {away_xg:.2f}.",
 }
+FALLBACK_ES: dict[str, str] = {
+    "goal": "GOL de {player}. {home_short} {score_home}-{score_away} {away_short}. xG {xg:.2f}.",
+    "big_chance": "{player}: ocasión de {xg:.2f} xG desde {distance_m} m.",
+    "shot_speed": "{player}: disparo a {shot_speed_kmh} km/h.",
+    "killer_pass": "{passer} a {receiver}: dificultad del pase {difficulty:.2f}.",
+    "momentum_swing": "{team}: {tilt_recent}% de dominio territorial, últimos 5 minutos.",
+    "sprint_speed": "{player}: {top_speed_kmh} km/h.",
+    "distance_10k": "{player}: {distance_km} km recorridos.",
+    "recap": FALLBACK["recap"],
+}
 
 # ---------------------------------------------------------------------------
 # Persona: the same moment for each viewer mode, in each language
@@ -220,8 +230,8 @@ def recap(context: dict, rng: random.Random) -> str:
     return render(RECAP[context["lang"]], context["facts"])
 
 
-def fallback(kind: str, facts: Facts) -> str:
-    tpl = FALLBACK.get(kind)
+def fallback(kind: str, facts: Facts, lang: str = "en") -> str:
+    tpl = (FALLBACK_ES if lang == "es" else FALLBACK).get(kind)
     if tpl is None or not all(k in facts for k in fields(tpl)):
         return facts.get("label", "")
     return render(tpl, facts)

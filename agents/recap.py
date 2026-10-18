@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import json
+import random
 from pathlib import Path
 
 from mcp_server import MatchTools
 
+from . import templates
 from .models import ModelClient
 from .types import Facts, Moment
 
@@ -70,6 +73,10 @@ class Recap:
                                          "get_player_stats(*)"])
 
     async def write(self, moment: Moment, facts: Facts, lang: str) -> str:
-        prompt = f"{moment.label}. Facts: {facts.values}. Language: {lang}."
+        prompt = f"{moment.label}. Language: {lang}.\nFacts: {json.dumps(facts.for_model(), ensure_ascii=False)}"
         context = {"facts": facts.values, "kind": "recap", "clock": moment.clock, "lang": lang}
         return (await self.model.complete("recap", SYSTEM, prompt, context)).strip()
+
+    def scripted(self, moment: Moment, facts: Facts, lang: str) -> str:
+        """The recap built from the facts alone, for when the model can't be used."""
+        return templates.recap({"facts": facts.values, "lang": lang}, random.Random(moment.clock))
