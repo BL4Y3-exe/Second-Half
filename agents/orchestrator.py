@@ -1,6 +1,7 @@
 """Runs the studio team: shared match state, explicit handoffs, retries and fallbacks.
 
 Spotter -> Analyst -> Storyteller <-> Fact-checker (max 2 retries) -> Director -> Persona -> viewers.
+The Director also sends a story back once when it carries too many numbers for a graphic.
 Half time and full time go to the Recap agent. Every handoff is published as
 a trace step so the app can show the team at work.
 """
@@ -9,13 +10,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import random
 import time
 from collections.abc import Callable
 
 from mcp_server import MatchTools
 from stats import MatchState
 
-from . import templates
+from . import slip, style, templates
 from .analyst import Analyst
 from .director import Director
 from .fact_checker import FactChecker
@@ -24,16 +26,17 @@ from .persona import MODES, Persona
 from .recap import Recap
 from .spotter import Spotter
 from .storyteller import Storyteller
-from .types import Moment, TraceStep
+from .types import Draft, Facts, Moment, TraceStep
 
 Publish = Callable[[str, dict], None]
 MAX_RETRIES = 2
+KEPT = "Kept the earlier draft: busy, but every number in it is right"
 log = logging.getLogger(__name__)
 
 
 class Orchestrator:
     def __init__(self, state: MatchState, publish: Publish, speed: float = 10.0, model: ModelClient | None = None,
-                 languages: tuple[str, ...] = ("en", "es"), seed: int = 0):
+                 languages: tuple[str, ...] = ("en", "es"), seed: int = 0, plant_slips: bool = False):
         self.state = state
         self.publish = publish
         self.model = model or MockModel(seed=seed)
@@ -49,7 +52,8 @@ class Orchestrator:
         self.queue: asyncio.Queue[Moment] = asyncio.Queue()
         self.trace: list[dict] = []
         self.overlays: list[dict] = []
-        self.stats = {"moments": 0, "approved_first_time": 0, "caught": 0, "fallbacks": 0, "dropped": 0}
+        self.stats = {"moments": 0, "approved_first_time": 0, "caught": 0, "fallbacks": 0, "dropped": 0, "planted": 0}
+        self.plant_slips = plant_slips  # the demo switch: see agents/slip.py
         self._step = 0
 
     # --- input from the live match --------------------------------------------
@@ -111,34 +115,54 @@ class Orchestrator:
                     ms=self._ms(started), detail={"tool_calls": facts.tool_calls, "facts": facts.values})
 
         approved: str | None = None
+        busy_draft: str | None = None  # approved, but sent back once for carrying too many numbers
         feedback: list[str] | None = None
+        last_draft: str | None = None
         why_fallback = "Story failed fact-checking twice, so a plain stat card goes out instead"
         fallback_reason = "fact_check"
         for attempt in range(1, MAX_RETRIES + 2):
             started = time.perf_counter()
             try:
-                draft = await self.storyteller.write(m, facts, attempt, feedback)
+                draft = await self.storyteller.write(m, facts, attempt, feedback, last_draft)
             except Exception as exc:  # timeout, quota, network: live TV can't wait, so fall back
                 self._trace(m.t, m.clock, m.id, "storyteller", "no answer", explain_failure(exc), status="rejected",
                             ms=self._ms(started))
+                if busy_draft:
+                    approved = busy_draft
+                    self._trace(m.t, m.clock, m.id, "director", "kept", KEPT)
+                    break
                 why_fallback = "The model didn't answer, so a plain stat card goes out instead"
                 fallback_reason = "no_answer"
                 break
             self._trace(m.t, m.clock, m.id, "storyteller", "drafted" if attempt == 1 else f"redrafted ({attempt})",
                         draft.text, ms=self._ms(started), detail={"attempt": attempt})
+            if attempt == 1 and self.plant_slips and (m.kind == "goal" or not self.stats["planted"]):
+                draft = self._plant(m, facts, draft)
+            last_draft = draft.text
             verdict = self.checker.check(draft.text, facts)
             if verdict.approved:
                 self._trace(m.t, m.clock, m.id, "fact_checker", "approved",
                             f"{len(verdict.checked)} numbers and names match the match data",
                             detail={"checked": verdict.checked})
-                approved = draft.text
                 if attempt == 1:
                     self.stats["approved_first_time"] += 1
+                busy = [] if busy_draft else style.problems(draft.text)
+                if busy and attempt <= MAX_RETRIES:
+                    busy_draft = draft.text
+                    self._trace(m.t, m.clock, m.id, "director", "sent back", f"Sent back: {busy[0]}", status="retry",
+                                detail={"problems": busy})
+                    feedback = [f"the director: {p}" for p in busy]
+                    continue
+                approved = draft.text
                 break
             self.stats["caught"] += 1
             self._trace(m.t, m.clock, m.id, "fact_checker", "rejected", "; ".join(verdict.problems), status="rejected",
                         detail={"problems": verdict.problems, "checked": verdict.checked})
-            feedback = verdict.problems
+            if busy_draft:  # the shorter redraft got a fact wrong, and the busy draft was right
+                approved = busy_draft
+                self._trace(m.t, m.clock, m.id, "director", "kept", KEPT)
+                break
+            feedback = [f"the fact-checker: {p}" for p in verdict.problems]
 
         fallback = approved is None
         if fallback:
@@ -155,11 +179,12 @@ class Orchestrator:
                     detail={"plugin": item["plugin"], "show_at": item["show_at"]})
 
         started = time.perf_counter()
-        texts, notes = await self.persona.render(m, facts, approved)
+        texts, notes, redrafts = await self.persona.render(m, facts, approved)
         self._trace(m.t, m.clock, m.id, "persona", "rewrote",
                     f"{len(MODES)} viewer modes in {', '.join(self.languages)}"
+                    + (f"; {len(redrafts)} redrafted to keep it simple" if redrafts else "")
                     + (f"; {len(notes)} fell back to the scripted line" if notes else ""),
-                    ms=self._ms(started), detail={"notes": notes})
+                    ms=self._ms(started), detail={"notes": notes, "redrafts": redrafts})
         item["story"] = approved
         item["text"] = texts
         if fallback:
@@ -200,6 +225,17 @@ class Orchestrator:
         return self._emit(item)
 
     # --- helpers ------------------------------------------------------------------
+
+    def _plant(self, m: Moment, facts: Facts, draft: Draft) -> Draft:
+        planted = slip.plant(draft.text, facts, random.Random(m.id))
+        if planted is None:
+            return draft
+        text, said, says = planted
+        self.stats["planted"] += 1
+        self._trace(m.t, m.clock, m.id, "test", "planted",
+                    f"Demo switch: changed {said} to {says} in the draft, to show the Fact-checker at work",
+                    status="planted", detail={"was": said, "now": says})
+        return Draft(draft.moment_id, text, draft.attempt)
 
     def _emit(self, item: dict) -> dict:
         self.overlays.append(item)

@@ -116,36 +116,7 @@ export function Pitch({ meta, frames, slots, replay = null, pin = null }: Props)
       role="img"
       aria-label="Live pitch"
     >
-      <defs>
-        <TelestratorDefs />
-        <pattern id="stripes" width="10.5" height={W} patternUnits="userSpaceOnUse">
-          <rect width="5.25" height={W} fill="var(--grass-a)" />
-          <rect x="5.25" width="5.25" height={W} fill="var(--grass-b)" />
-        </pattern>
-      </defs>
-      <rect x={-M} y={-M} width={L + 2 * M} height={W + 2 * M} fill="var(--grass-b)" />
-      <rect x={0} y={0} width={L} height={W} fill="url(#stripes)" />
-      <g className="lines">
-        <rect x={0} y={0} width={L} height={W} />
-        <line x1={L / 2} y1={0} x2={L / 2} y2={W} />
-        <circle cx={L / 2} cy={W / 2} r={9.15} />
-        <circle cx={L / 2} cy={W / 2} r={0.4} className="spot" />
-        {[0, 1].map((end) => {
-          const x = end === 0 ? 0 : L;
-          const dir = end === 0 ? 1 : -1;
-          return (
-            <g key={end}>
-              <rect x={end === 0 ? 0 : L - 16.5} y={W / 2 - 20.16} width={16.5} height={40.32} />
-              <rect x={end === 0 ? 0 : L - 5.5} y={W / 2 - 9.16} width={5.5} height={18.32} />
-              <circle cx={x + dir * 11} cy={W / 2} r={0.4} className="spot" />
-              <path
-                d={`M ${x + dir * 16.5} ${W / 2 - 7.3} A 9.15 9.15 0 0 ${end === 0 ? 1 : 0} ${x + dir * 16.5} ${W / 2 + 7.3}`}
-              />
-              <rect x={end === 0 ? -2 : L} y={W / 2 - 3.66} width={2} height={7.32} className="goal" />
-            </g>
-          );
-        })}
-      </g>
+      <PitchBase />
 
       {drawn &&
         drawn.players.map(([x, y], i) => {
@@ -203,6 +174,54 @@ export function Pitch({ meta, frames, slots, replay = null, pin = null }: Props)
           </g>
         </g>
       )}
+    </svg>
+  );
+}
+
+/** The grass, the markings and the arrow heads: everything on the pitch that never moves. */
+export function PitchBase() {
+  return (
+    <>
+      <defs>
+        <TelestratorDefs />
+        <pattern id="stripes" width="10.5" height={W} patternUnits="userSpaceOnUse">
+          <rect width="5.25" height={W} fill="var(--grass-a)" />
+          <rect x="5.25" width="5.25" height={W} fill="var(--grass-b)" />
+        </pattern>
+      </defs>
+      <rect x={-M} y={-M} width={L + 2 * M} height={W + 2 * M} fill="var(--grass-b)" />
+      <rect x={0} y={0} width={L} height={W} fill="url(#stripes)" />
+      <g className="lines">
+        <rect x={0} y={0} width={L} height={W} />
+        <line x1={L / 2} y1={0} x2={L / 2} y2={W} />
+        <circle cx={L / 2} cy={W / 2} r={9.15} />
+        <circle cx={L / 2} cy={W / 2} r={0.4} className="spot" />
+        {[0, 1].map((end) => {
+          const x = end === 0 ? 0 : L;
+          const dir = end === 0 ? 1 : -1;
+          return (
+            <g key={end}>
+              <rect x={end === 0 ? 0 : L - 16.5} y={W / 2 - 20.16} width={16.5} height={40.32} />
+              <rect x={end === 0 ? 0 : L - 5.5} y={W / 2 - 9.16} width={5.5} height={18.32} />
+              <circle cx={x + dir * 11} cy={W / 2} r={0.4} className="spot" />
+              <path
+                d={`M ${x + dir * 16.5} ${W / 2 - 7.3} A 9.15 9.15 0 0 ${end === 0 ? 1 : 0} ${x + dir * 16.5} ${W / 2 + 7.3}`}
+              />
+              <rect x={end === 0 ? -2 : L} y={W / 2 - 3.66} width={2} height={7.32} className="goal" />
+            </g>
+          );
+        })}
+      </g>
+    </>
+  );
+}
+
+/** A still picture of a move: the pitch and the Telestrator's arrows, without the players. */
+export function MovePitch({ drawing }: { drawing: Drawing }) {
+  return (
+    <svg className="pitch move" viewBox={`${-M} ${-M} ${L + 2 * M} ${W + 2 * M}`} role="img" aria-label="The move">
+      <PitchBase />
+      <Telestrator drawing={drawing} at={null} positions={new Map()} />
     </svg>
   );
 }

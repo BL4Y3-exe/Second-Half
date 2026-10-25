@@ -27,7 +27,7 @@ async def run(args: argparse.Namespace) -> None:
         model.mistake_rate = args.mistakes
     print(f"\n  model: {model.name}")
     orch = Orchestrator(state, lambda kind, data: printed.append((kind, data)), speed=args.speed,
-                        model=model, languages=(args.lang,))
+                        model=model, languages=(args.lang,), plant_slips=args.plant)
 
     def show() -> None:
         for kind, d in printed:
@@ -56,7 +56,8 @@ async def run(args: argparse.Namespace) -> None:
     await orch.drain()
     show()
     s = orch.stats
-    print(f"\n  {s['moments']} moments, {s['caught']} wrong numbers caught by the Fact-checker, "
+    planted = f" ({s['planted']} planted by the demo switch)" if s["planted"] else ""
+    print(f"\n  {s['moments']} moments, {s['caught']} wrong numbers caught by the Fact-checker{planted}, "
           f"{s['fallbacks']} fallbacks, {s['dropped']} dropped to avoid clutter.\n")
 
 
@@ -74,6 +75,8 @@ def main() -> None:
     parser.add_argument("--until", type=int, default=0, help="stop after this many minutes of match time")
     parser.add_argument("--mistakes", type=float, default=0.2, help="how often the mock Storyteller slips")
     parser.add_argument("--trace", action="store_true", help="show every agent handoff")
+    parser.add_argument("--plant", action="store_true",
+                        help="demo switch: plant a wrong number in the first story and each goal for the Fact-checker")
     asyncio.run(run(parser.parse_args()))
 
 

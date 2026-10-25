@@ -1,47 +1,55 @@
 import { useEffect, useMemo, useState } from "react";
+import { Analysis } from "./analysis/Analysis";
 import { LANGS, MODES } from "./i18n";
-import { EventFeed } from "./overlays/EventFeed";
-import { StatsPanel } from "./overlays/StatsPanel";
-import { TracePanel } from "./overlays/TracePanel";
+import { MatchSetup, type MatchForm } from "./MatchSetup";
+import { NoteTip } from "./NoteTip";
+import { NOTES } from "./notes";
+import { ScoreBug } from "./overlays/ScoreBug";
 import type { Club, Lang, Mode, Side } from "./types";
 import { useLiveMatch, type MatchRequest } from "./useLiveMatch";
-import { ViewerControls, ViewerStage, type ViewerSettings } from "./Viewer";
+import { type ViewerSettings } from "./Viewer";
+import { GUEST, Watch } from "./watch/Watch";
 
-const SPEEDS = [1, 5, 10, 20, 40];
-
-type View = "desk" | "split";
+type View = "watch" | "analysis";
 
 export default function App() {
   const [clubs, setClubs] = useState<Club[]>([]);
-  const [form, setForm] = useState({ home: "harbourside", away: "kingsmere", seed: 9, speed: 10 });
+  const [form, setForm] = useState<MatchForm>({
+    home: "harbourside",
+    away: "kingsmere",
+    seed: 9,
+    speed: 10,
+    plant: false,
+  });
   const [req, setReq] = useState<MatchRequest | null>(null);
-  const [view, setView] = useState<View>("desk");
-  const [desk, setDesk] = useState<ViewerSettings>({ mode: "analyst", lang: "en", favourite: null });
-  // Split screen: the same match for two very different viewers.
-  const [left, setLeft] = useState<ViewerSettings>({ mode: "analyst", lang: "en", favourite: null });
-  const [right, setRight] = useState<ViewerSettings>({ mode: "casual", lang: "es", favourite: "AWAY" });
-  const [tab, setTab] = useState<"feed" | "trace">("feed");
-  const { meta, events, triggers, snapshot, overlays, trace, status, frames } = useLiveMatch(req);
+  const [view, setView] = useState<View>("watch");
+  const [you, setYou] = useState<ViewerSettings>({ mode: "analyst", lang: "en", favourite: null });
+  const [guest, setGuest] = useState<ViewerSettings | null>(null);
+  const live = useLiveMatch(req);
+  const { meta, events, snapshot, status } = live;
 
   useEffect(() => {
-    // ?seed=7&speed=20&mode=casual&lang=es&fav=HOME&tab=trace&view=split in the address bar sets up the screen.
+    // ?seed=7&speed=20&mode=casual&lang=es&fav=HOME&view=analysis&guest=1&plant=1 in the address bar
+    // sets up the screen.
     const params = new URLSearchParams(window.location.search);
     const start = {
       ...form,
       seed: Number(params.get("seed") ?? form.seed),
       speed: Number(params.get("speed") ?? form.speed),
+      plant: params.get("plant") === "1",
     };
     setForm(start);
     const m = params.get("mode");
     const l = params.get("lang");
     const f = params.get("fav");
-    setDesk({
+    setYou({
       mode: MODES.some((x) => x.id === m) ? (m as Mode) : "analyst",
       lang: LANGS.some((x) => x.id === l) ? (l as Lang) : "en",
       favourite: f === "HOME" || f === "AWAY" ? f : null,
     });
-    if (params.get("tab") === "trace") setTab("trace");
-    if (params.get("view") === "split") setView("split");
+    // Older links: view=split was two viewers side by side, tab=trace the agent trace.
+    if (params.get("view") === "analysis" || params.get("tab") === "trace") setView("analysis");
+    if (params.get("guest") === "1" || params.get("view") === "split") setGuest(GUEST);
     fetch("/api/clubs")
       .then((r) => r.json())
       .then(setClubs)
@@ -53,9 +61,11 @@ export default function App() {
   const switchView = (v: View) => {
     setView(v);
     const url = new URL(window.location.href);
-    if (v === "split") url.searchParams.set("view", "split");
+    url.searchParams.delete("tab");
+    if (v === "analysis") url.searchParams.set("view", "analysis");
     else url.searchParams.delete("view");
     window.history.replaceState(null, "", url);
+    window.scrollTo(0, 0);
   };
 
   // Which player is in which slot changes only at substitutions.
@@ -71,148 +81,112 @@ export default function App() {
     return s;
   }, [meta, events]);
 
-  const caught = trace.filter((s) => s.agent === "fact_checker" && s.status === "rejected").length;
   const lastEvent = events[events.length - 1];
   const clock = snapshot?.clock ?? lastEvent?.clock ?? "00:00";
+  // Match seconds when the second half kicked off: the clock restarts at 45:00 then, whatever the stoppage time.
+  let secondHalfAt: number | null = null;
+  if (snapshot && snapshot.period >= 2) {
+    const [mm, ss] = snapshot.clock.split(":").map(Number);
+    secondHalfAt = Math.round(snapshot.t - (mm * 60 + ss - 45 * 60));
+  }
   const kickOff = () => setReq({ ...form, run: (req?.run ?? 0) + 1 });
-  const stage = (settings: ViewerSettings) =>
-    meta && (
-      <ViewerStage
-        meta={meta}
-        frames={frames}
-        slots={slots}
-        overlays={overlays}
-        snapshot={snapshot}
-        clock={clock}
-        status={status}
-        settings={settings}
-      />
-    );
-  const placeholder = (
-    <div className="placeholder">
-      {status === "error" ? "Can't reach the match server. Is `python -m api` running?" : "Connecting…"}
+
+  const bar = (
+    <div className="bar">
+      <div className="seg view-switch" role="group" aria-label="View">
+        {(["watch", "analysis"] as View[]).map((v) => (
+          <button
+            key={v}
+            type="button"
+            aria-pressed={view === v}
+            className={view === v ? "on" : ""}
+            onClick={() => switchView(v)}
+            data-note={NOTES[v]}
+          >
+            {v === "watch" ? "Watch" : "Analysis"}
+          </button>
+        ))}
+      </div>
+      <MatchSetup clubs={clubs} form={form} setForm={setForm} onKickOff={kickOff} playing={meta} />
     </div>
   );
+  const scoreBug = meta && <ScoreBug meta={meta} snapshot={snapshot} clock={clock} status={status} lang={you.lang} />;
+  const waiting = <div className="placeholder">{status === "error" ? NOTES.live.error : "Connecting…"}</div>;
+
+  if (view === "watch") {
+    return (
+      <>
+        <h1 className="sr-only">Second Half</h1>
+        {meta ? (
+          <Watch
+            {...live}
+            meta={meta}
+            slots={slots}
+            clock={clock}
+            you={you}
+            setYou={setYou}
+            guest={guest}
+            setGuest={setGuest}
+            scoreBug={
+              <>
+                <span className="logo" aria-hidden="true">
+                  2H
+                </span>
+                {scoreBug}
+              </>
+            }
+            bar={bar}
+            onTrace={() => switchView("analysis")}
+          />
+        ) : (
+          <div className="tv tv-waiting">
+            <div className="tv-top">
+              <div className="tv-left" />
+              <div className="tv-centre">{bar}</div>
+              <div className="tv-right" />
+            </div>
+            {waiting}
+          </div>
+        )}
+        <NoteTip />
+      </>
+    );
+  }
 
   return (
-    <div className={`app${view === "split" ? " wide" : ""}`}>
-      <header>
+    <div className="app">
+      <header className="gallery">
         <div className="brand">
-          <span className="logo">2H</span>
+          <span className="logo" aria-hidden="true">
+            2H
+          </span>
           <div>
-            <h1>Second Half</h1>
-            <p>Live AI match desk · synthetic match data</p>
+            <h1 translate="no">Second Half</h1>
+            <p>Analysis · the gallery behind the broadcast</p>
           </div>
         </div>
-        <div className="seg view-switch" role="group" aria-label="View">
-          <button className={view === "desk" ? "on" : ""} onClick={() => switchView("desk")}>
-            Match desk
-          </button>
-          <button className={view === "split" ? "on" : ""} onClick={() => switchView("split")}>
-            Split screen
-          </button>
-        </div>
-        <form
-          className="controls"
-          onSubmit={(e) => {
-            e.preventDefault();
-            kickOff();
-          }}
-        >
-          <label>
-            Home
-            <select value={form.home} onChange={(e) => setForm({ ...form, home: e.target.value })}>
-              {clubs.map((c) => (
-                <option key={c.key} value={c.key} disabled={c.key === form.away}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Away
-            <select value={form.away} onChange={(e) => setForm({ ...form, away: e.target.value })}>
-              {clubs.map((c) => (
-                <option key={c.key} value={c.key} disabled={c.key === form.home}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Seed
-            <input
-              type="number"
-              value={form.seed}
-              onChange={(e) => setForm({ ...form, seed: Number(e.target.value) || 0 })}
-            />
-          </label>
-          <label>
-            Speed
-            <select value={form.speed} onChange={(e) => setForm({ ...form, speed: Number(e.target.value) })}>
-              {SPEEDS.map((s) => (
-                <option key={s} value={s}>
-                  {s}x
-                </option>
-              ))}
-            </select>
-          </label>
-          <button type="submit">Kick off</button>
-        </form>
+        {status === "live" && (
+          <span className="on-air" data-note={NOTES.live.live}>
+            On air
+          </span>
+        )}
+        {scoreBug}
+        {bar}
       </header>
-
-      {view === "split" ? (
-        <main className="split-screen">
-          {meta ? (
-            [
-              { label: "Viewer 1", settings: left, set: setLeft },
-              { label: "Viewer 2", settings: right, set: setRight },
-            ].map((pane) => (
-              <section key={pane.label} className="pane">
-                <ViewerControls meta={meta} settings={pane.settings} onChange={pane.set} />
-                {stage(pane.settings)}
-              </section>
-            ))
-          ) : (
-            <section className="pane wide-pane">{placeholder}</section>
-          )}
-          <aside>{meta && <TracePanel meta={meta} trace={trace} />}</aside>
-        </main>
+      {meta ? (
+        <Analysis
+          {...live}
+          meta={meta}
+          slots={slots}
+          clock={clock}
+          secondHalfAt={secondHalfAt}
+          you={you}
+          guest={guest}
+        />
       ) : (
-        <main>
-          <section className="stage">
-            {meta ? (
-              <>
-                <ViewerControls meta={meta} settings={desk} onChange={setDesk} />
-                {stage(desk)}
-                <StatsPanel meta={meta} snapshot={snapshot} />
-              </>
-            ) : (
-              placeholder
-            )}
-          </section>
-          <aside>
-            {meta && (
-              <>
-                <div className="tabs" role="tablist">
-                  <button role="tab" aria-selected={tab === "feed"} onClick={() => setTab("feed")}>
-                    Match feed
-                  </button>
-                  <button role="tab" aria-selected={tab === "trace"} onClick={() => setTab("trace")}>
-                    Agent trace
-                    {caught > 0 && <span className="pill">{caught} caught</span>}
-                  </button>
-                </div>
-                {tab === "feed" ? (
-                  <EventFeed meta={meta} events={events} triggers={triggers} />
-                ) : (
-                  <TracePanel meta={meta} trace={trace} />
-                )}
-              </>
-            )}
-          </aside>
-        </main>
+        waiting
       )}
+      <NoteTip />
     </div>
   );
 }

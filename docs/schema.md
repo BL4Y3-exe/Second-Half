@@ -141,11 +141,23 @@ One handoff between agents. Sent as the `trace` SSE event.
 ```
 
 `agent` is one of `spotter`, `analyst`, `storyteller`, `fact_checker`,
-`director`, `persona`, `recap`. `status` is `ok`, `rejected`, `fallback` or
-`skipped` (a moment the Spotter passed over or the Director held back or
-dropped as too late; for one the Spotter passed over, `moment_id` is the
+`director`, `persona`, `recap`. `status` is `ok`, `rejected`, `retry`,
+`fallback` or `skipped` (a moment the Spotter passed over or the Director held
+back or dropped as too late; for one the Spotter passed over, `moment_id` is the
 trigger id). A model call that failed or timed out is traced with the action
 `no answer` and status `rejected`.
+
+With the demo switch on (`plant=1` on `/api/live`, `planted_slips` in the
+match meta), the first story and every goal's first draft get one number
+changed before fact-checking. That step is traced with the agent `test`, the
+action `planted` and status `planted`, and its `detail` has `was` and `now`.
+
+The Director sends a story with more than 3 numbers back once, with the action
+`sent back` and status `retry`. If the shorter redraft then gets a fact wrong
+or doesn't arrive, the Director keeps the earlier draft (action `kept`). The
+Persona's step lists the versions it redrafted for the same reason, or for
+jargon in a casual line, in `detail.redrafts`, and the ones that fell back to
+the scripted line in `detail.notes`.
 
 ## Graphics plugin manifest (`plugins/<id>/manifest.json`)
 

@@ -17,12 +17,15 @@ class Storyteller:
     def __init__(self, model: ModelClient):
         self.model = model
 
-    async def write(self, moment: Moment, facts: Facts, attempt: int, feedback: list[str] | None = None) -> Draft:
+    async def write(self, moment: Moment, facts: Facts, attempt: int, feedback: list[str] | None = None,
+                    last_draft: str | None = None) -> Draft:
         # No clock: "42:58" would put two numbers in the story that aren't facts (the minute is one).
         facts_json = json.dumps(facts.for_model(), ensure_ascii=False)
         prompt = f"Moment: {moment.label} ({moment.kind}).\nFacts: {facts_json}\n"
         if feedback:
-            prompt += "Your last draft was rejected by the fact-checker:\n- " + "\n- ".join(feedback) + "\n"
+            if last_draft:
+                prompt += f"Your last draft: {last_draft}\n"
+            prompt += "It was sent back by\n- " + "\n- ".join(feedback) + "\n"
         text = await self.model.complete(
             "storyteller", SYSTEM, prompt,
             {"facts": facts.values, "kind": moment.kind, "clock": moment.clock, "attempt": attempt,

@@ -1,3 +1,4 @@
+import { NOTES, STAT_NOTES } from "../notes";
 import type { Meta, Snapshot } from "../types";
 
 interface RowProps {
@@ -16,7 +17,9 @@ function Row({ label, home, away, pct, digits = 0 }: RowProps) {
     <div className="stat-row">
       <span className="v">{fmt(home)}</span>
       <div className="mid">
-        <span className="label">{label}</span>
+        <span className="label" data-note={STAT_NOTES[label]}>
+          {label}
+        </span>
         <div className="split">
           <div className="home" style={{ width: `${share}%` }} />
           <div className="away" style={{ width: `${100 - share}%` }} />
@@ -44,9 +47,10 @@ export function StatsPanel({ meta, snapshot }: { meta: Meta; snapshot: Snapshot 
         } as React.CSSProperties
       }
     >
+      <h2 className="stats-title">Team numbers</h2>
       <div className="gauges">
         <div className="gauge">
-          <div className="gauge-label">
+          <div className="gauge-label" data-note={NOTES.momentum}>
             Momentum
             <span>{m > 35 ? meta.teams.HOME.short : m < -35 ? meta.teams.AWAY.short : "Even"}</span>
           </div>
@@ -59,8 +63,8 @@ export function StatsPanel({ meta, snapshot }: { meta: Meta; snapshot: Snapshot 
           </div>
         </div>
         <div className="gauge">
-          <div className="gauge-label">
-            Control vs Chaos
+          <div className="gauge-label" data-note={NOTES.controlChaos}>
+            Control vs chaos
             <span>{ccLabel}</span>
           </div>
           <div className="cc">

@@ -27,6 +27,7 @@ export interface Meta {
   teams: Record<Side, Team>;
   model?: string; // "mock" or the Foundry deployment the agents run on
   languages?: Lang[];
+  planted_slips?: boolean; // the demo switch: wrong numbers planted for the Fact-checker to catch
 }
 
 export interface Frame {
@@ -88,6 +89,12 @@ export interface Snapshot {
   control_chaos: number;
   momentum: number;
   teams: Record<Side, TeamStats>;
+}
+
+/** Momentum at the start of each minute of play: -100 (away on top) to +100 (home on top). */
+export interface MomentumPoint {
+  minute: number; // whole minutes of match time played, stoppage time included
+  momentum: number;
 }
 
 export interface Club {
@@ -162,7 +169,7 @@ export interface TraceStep {
   agent: string;
   action: string;
   summary: string;
-  status: "ok" | "rejected" | "retry" | "fallback" | "skipped";
+  status: "ok" | "rejected" | "retry" | "fallback" | "skipped" | "planted";
   ms: number;
   detail: Record<string, unknown>;
 }

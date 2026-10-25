@@ -4,15 +4,23 @@ A live AI studio team for a synthetic football match. A simulator plays a
 made-up match, a stats engine turns it into numbers, and a team of agents
 decides what matters, explains it, fact-checks itself and puts graphics on
 screen, tuned to each viewer (Analyst, Casual fan, Player focus, Favourite
-club, any language).
+club, English or Spanish).
 
-Built for the Microsoft *Inside the Game* developer hackathon. All clubs,
-players and matches are fictional.
+Built for the Microsoft *Inside the Game* developer hackathon with Microsoft
+Foundry, Microsoft Agent Framework, the Model Context Protocol and Azure
+Container Apps. All clubs, players and matches are fictional.
 
-> **Status:** in progress. Done: match simulator, stats engine, live feed,
-> browser pitch view, the agent team with graphics plugins (on Microsoft
-> Foundry or a built-in mock model), the Telestrator, viewer modes and the
-> agent trace, the MCP server, and the Azure deployment set-up.
+**[Live demo](https://second-half.niceground-c6cb8283.germanywestcentral.azurecontainerapps.io)**
+· [with a guest and the demo switch on](https://second-half.niceground-c6cb8283.germanywestcentral.azurecontainerapps.io/?guest=1&plant=1&seed=17)
+· [Analysis view](https://second-half.niceground-c6cb8283.germanywestcentral.azurecontainerapps.io/?view=analysis&plant=1&seed=17)
+· MCP endpoint: the live demo address plus `/mcp`
+
+![The living room: a goal on a tilted broadcast pitch with the Telestrator
+replaying the move. The white lower third gives an English-speaking analyst
+the xG, distance and shot speed; the guest's screen in the corner gives a
+Spanish-speaking casual Kingsmere fan one plain line. The strip along the
+bottom shows the agents behind the graphic, with the Fact-checker catching a
+planted wrong number.](docs/images/living-room.png)
 
 ## Quickstart
 
@@ -33,31 +41,58 @@ python -m api
 ```
 
 The page starts Harbourside Athletic v Kingsmere Rovers (seed 9: a
-second-half comeback with a stoppage-time winner) at 10x speed. Pick
-other clubs, a seed and a speed at the top and press **Kick off**.
+second-half comeback with a stoppage-time winner) at 10x speed. To pick
+other clubs, a seed and a speed, open the **Match** button at the top and
+press **Kick off**.
 
-While the match plays, the agent team puts graphics over the pitch: goal,
-chance and pass cards, momentum swings, top-speed tags and half-time and
-full-time recaps. Moments with a Telestrator drawing replay the move on the
-pitch with the arrows drawn in as the ball travels. Above the pitch you can
-switch the viewer mode (Analyst, Casual fan, Player focus), the language
-(English, Español) and pick a favourite club. The **Agent trace** tab on the
-right shows every handoff between the agents, including the wrong numbers
-the Fact-checker caught.
+The page has two views, switched at the top.
 
-**Split screen** (top right) shows the same live match to two viewers side
-by side, each with their own mode, language and club, next to the agent
-trace. By default it is an English-speaking analyst and a Spanish-speaking
-casual Kingsmere fan. It is laid out for a 1920x1080 screen recording.
+**Watch** is the living room: the match as a TV broadcast, seen through a
+tilted main camera. While the match plays, the agent team puts graphics on
+screen: goal, chance and pass cards, momentum swings, top-speed tags and
+half-time and full-time recaps. Moments with a Telestrator drawing replay the
+move on the pitch with the arrows drawn in as the ball travels. Click **You**
+at the top right to switch the viewer mode (Analyst, Casual fan, Player
+focus), the language (English, Español) and pick a favourite club; the line
+under those buttons says what the option you are on does. A casual fan's
+graphics leave out the stat chips and the xG label too, so their screen
+carries one number at most. Press **+** to add a second viewer: the guest's
+screen opens in the corner with their own mode, language and club (by
+default a Spanish-speaking casual Kingsmere fan). The strip along the bottom,
+**Behind this graphic**, shows the relay of agents that made the graphic on
+screen, with any wrong number the Fact-checker caught struck through next to
+the right one. Watch is laid out for a 1920x1080 screen recording.
+
+**Analysis** is the gallery behind the broadcast, with all the data. How the
+match has swung: momentum every minute, with every moment the Spotter flagged
+on a rail underneath; pick one, or follow live. The programme monitor sits
+next to each agent's desk for that moment: the Analyst's tool calls, each
+draft with the caught numbers marked, the Fact-checker's verdict and how long
+each step took. Below are the move as the Telestrator drew it with all six
+versions the viewers could get, the rundown of every moment with running
+totals, the team numbers and the match feed. Hover over (or tab to) any
+control, stat, agent name or total with a dotted underline for a
+one-sentence note on what it is.
+
+![The Analysis view: the momentum wave with goals on the rail, the programme
+monitor, and the agent desks for the first goal, where the Fact-checker sends
+back a draft with a planted wrong distance and xG.](docs/images/analysis.png)
 
 No Azure account or API key is needed: unless you set up Microsoft Foundry
 (below), the agents run on a built-in mock model that writes from templates
 and deliberately slips a wrong number into some first drafts (always
 including the first goal's), so you can watch the Fact-checker catch it.
 
+A real model rarely gets a number wrong, so a demo can't count on a catch.
+Tick **Plant a slip** before kick off and a demo switch changes one number
+in the first story and in every goal's first draft before fact-checking.
+Both views mark each one as planted, so the catch on screen is never
+passed off as the model's own mistake.
+
 You can link straight to a set-up, which is handy for demos:
-`http://127.0.0.1:8000/?seed=12&speed=20&mode=casual&lang=es&fav=HOME&tab=trace`,
-or `http://127.0.0.1:8000/?view=split` for the split screen.
+`http://127.0.0.1:8000/?seed=12&speed=20&mode=casual&lang=es&fav=HOME&view=analysis`,
+or `http://127.0.0.1:8000/?guest=1&plant=1` for the living room with a guest
+and the demo switch on.
 
 **Working on the web app?** Run `python -m api` in one terminal and
 `npm run dev` inside `web/` in another, then open http://localhost:5173.
@@ -90,7 +125,7 @@ Microsoft Entra ID, so there are no API keys to keep.
    python -m api
    ```
 
-The agent trace shows which model is writing (the chip next to its title).
+The Rundown in the Analysis view shows which model is writing (the chip next to its title).
 Models from the gpt-5 family think before they answer; the app asks for
 `low` effort by default. For the quickest lines set
 `FOUNDRY_REASONING_EFFORT=minimal` (gpt-5, gpt-5-mini, gpt-5-nano) or
@@ -101,7 +136,7 @@ Live TV can't wait for a slow model, so every call has a 20-second limit.
 If the model doesn't answer, the Storyteller's moment goes out as a plain
 stat card, and a Persona or Recap version falls back to the scripted line
 built from the same facts. Minor moments the team only reaches after 25
-seconds are dropped. All of this shows up in the trace.
+seconds are dropped. All of this shows up in the Analysis view.
 
 ## Command line
 
@@ -128,6 +163,7 @@ python -m agents --seed 9
 python -m agents --seed 9 --trace              # every handoff, rejected drafts marked x
 python -m agents --seed 9 --mode casual --lang es
 python -m agents --model foundry --until 30    # on Microsoft Foundry (see above), first 30 minutes
+python -m agents --model foundry --plant --trace  # with the demo switch: planted slips, caught
 ```
 
 Clubs: `harbourside`, `kingsmere`, `ashford`, `northgate` (`--home`,
@@ -135,11 +171,18 @@ Clubs: `harbourside`, `kingsmere`, `ashford`, `northgate` (`--home`,
 
 ## How it fits together
 
-```
-simulator  ->  stats engine  ->  agent team  ->  live feed (FastAPI, SSE)  ->  web app (React)
- positions      xG, speeds,       Spotter ...      one match per (clubs,       pitch, graphics,
- + events       momentum,         Recap, with      seed, speed), shared        Telestrator, viewer
-                triggers          match tools      by every viewer             modes, agent trace
+```mermaid
+flowchart LR
+  subgraph aca["Azure Container Apps: one container"]
+    sim["Simulator<br/>22 players and the ball, every 0.1 s"] --> stats["Stats engine<br/>xG, speeds, momentum, triggers"]
+    stats --> team["Agent team<br/>7 agents"]
+    stats --> tools["Match tools<br/>12 tools, also served at /mcp"]
+    team -- "Analyst asks" --> tools
+    team --> feed["Live feed<br/>FastAPI, Server-Sent Events"]
+  end
+  team -- "managed identity, no keys" --> foundry["Microsoft Foundry<br/>model for the 3 writing agents"]
+  feed -- "one match, shared by every viewer" --> web["Browsers<br/>pitch, graphics, Telestrator, trace"]
+  clients["MCP clients<br/>GitHub Copilot in VS Code"] -- "/mcp" --> tools
 ```
 
 ### Simulator (`simulator/`)
@@ -185,9 +228,30 @@ Seven agents work each key moment in turn:
 | Analyst | Looks up the facts with the match tools: the passage of play, xG, speeds, the player's and team's numbers. |
 | Storyteller | Writes one or two sentences on why the moment matters, using only those facts. |
 | Fact-checker | Plain code, no AI. Every number and player name in the draft must match match state. If not, it sends the draft back with the reason; after two failures (or if the model doesn't answer) a plain stat card goes out instead. |
-| Director | Picks the graphics plugin and slot, builds the Telestrator drawing from real event positions, and schedules items so graphics never pile up. |
-| Persona | Rewrites the approved story for each viewer mode and language, all at once; each version is fact-checked again, and one that fails falls back to a scripted line built from the facts. |
+| Director | Sends a story with more than 3 numbers back once, picks the graphics plugin and slot, builds the Telestrator drawing from real event positions, and schedules items so graphics never pile up. |
+| Persona | Rewrites the approved story for each viewer mode and language, all at once. Each version is fact-checked again; one that is too busy, or uses jargon like xG for a casual fan, gets one redraft; one that still fails falls back to a scripted line built from the facts. |
 | Recap | Writes the half-time and full-time summaries with player ratings. |
+
+Every moment goes down this path, and each check that sends work back has a
+fallback if the redraft fails too:
+
+```mermaid
+flowchart TD
+  spotter[Spotter] --> analyst[Analyst] -- "the facts, nothing else" --> story[Storyteller]
+  story --> checker{Fact-checker}
+  checker -- "wrong number or name" --> story
+  checker -- "fails twice" --> card[Stat card]
+  story -- "no answer in 20 s" --> card
+  checker -- approved --> director[Director]
+  director -- "more than 3 numbers, once" --> story
+  card --> director
+  director --> persona[Persona]
+  persona -- "too busy or jargon, once" --> persona
+  persona -- "still fails" --> scripted[Scripted line]
+  persona --> screen[On screen]
+  scripted --> screen
+  spotter -- "half and full time" --> recap[Recap] --> director
+```
 
 The agents talk to a model through one small interface
 (`agents/models.py`). With Foundry configured, the Storyteller, Persona and
@@ -219,8 +283,9 @@ write one.
 Server-Sent Events: `meta` (team sheets), `frame` (positions, about 12 a
 second), `event` (with computed stats attached), `trigger`, `stats` (a
 snapshot every second), `overlay` (a graphic the Director scheduled),
-`trace` (one agent handoff) and `end`. Viewers of the same match share one
-running match and one agent team.
+`trace` (one agent handoff) and `end`. A viewer who joins late also gets
+`history` (the momentum every minute so far). Viewers of the same match share
+one running match and one agent team.
 
 The data formats are documented in [docs/schema.md](docs/schema.md).
 

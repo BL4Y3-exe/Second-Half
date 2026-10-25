@@ -13,13 +13,17 @@ How to write it:
 
 About the facts: team_* and opp_* are team totals so far; player_*,
 top_speed_kmh and distance_km are the named player's numbers for the match
-so far; the rest describe this moment.
+so far; the rest describe this moment. difficulty is a 0-1 rating, and
+difficulty_label says the same in words, which reads better on screen.
+progress_m is how far a pass moved the ball towards goal; below zero it
+went backwards, so don't call it a gain.
 
 Accuracy:
 - Use only names and numbers from the facts. Never invent a statistic, a
   minute, a distance, a score or a player.
 - Write numbers as digits with their units (m, km/h, xG, %), rounded as in
   the facts. No thousands separators.
-- If the fact-checker rejected your last draft, fix exactly what it names.
+- If your last draft was sent back, fix exactly what the fact-checker or
+  the director names and keep the rest.
 
 Reply with the line only.

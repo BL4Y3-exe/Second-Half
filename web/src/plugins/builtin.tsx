@@ -1,5 +1,5 @@
 import { tr } from "../i18n";
-import type { Lang, Meta, Overlay, Side } from "../types";
+import type { Lang, Meta, Mode, Overlay, Side } from "../types";
 
 /** What every graphics plugin is handed: the Director's item and the viewer's text for it. */
 export interface PluginProps {
@@ -7,12 +7,15 @@ export interface PluginProps {
   text: string;
   meta: Meta;
   lang: Lang;
+  mode: Mode;
 }
 
 const num = (v: unknown, digits = 0) => (typeof v === "number" ? v.toFixed(digits) : "–");
 const str = (v: unknown) => (typeof v === "string" ? v : "");
 
-function Chips({ items }: { items: [string, string][] }) {
+/** The stat chips under a card's headline. A casual viewer gets none: their line already says what matters. */
+function Chips({ items, mode }: { items: [string, string][]; mode: Mode }) {
+  if (mode === "casual") return null;
   return (
     <div className="lt-chips">
       {items.map(([label, value]) => (
@@ -24,7 +27,7 @@ function Chips({ items }: { items: [string, string][] }) {
   );
 }
 
-export function GoalCard({ overlay, meta, lang }: PluginProps) {
+export function GoalCard({ overlay, meta, lang, mode }: PluginProps) {
   const d = overlay.data;
   const { HOME: home, AWAY: away } = meta.teams;
   return (
@@ -41,12 +44,13 @@ export function GoalCard({ overlay, meta, lang }: PluginProps) {
           [tr(lang, "distance"), `${num(d.distance_m)} m`],
           [tr(lang, "shot_speed_label"), `${num(d.shot_speed_kmh)} km/h`],
         ]}
+        mode={mode}
       />
     </>
   );
 }
 
-export function ShotCard({ overlay, lang }: PluginProps) {
+export function ShotCard({ overlay, lang, mode }: PluginProps) {
   const d = overlay.data;
   const outcome = str(lang === "es" ? d.outcome_text_es : d.outcome_text) || str(d.outcome_text);
   return (
@@ -61,12 +65,13 @@ export function ShotCard({ overlay, lang }: PluginProps) {
           [tr(lang, "distance"), `${num(d.distance_m)} m`],
           [tr(lang, "shot_speed_label"), `${num(d.shot_speed_kmh)} km/h`],
         ]}
+        mode={mode}
       />
     </>
   );
 }
 
-export function PassCard({ overlay, lang }: PluginProps) {
+export function PassCard({ overlay, lang, mode }: PluginProps) {
   const d = overlay.data;
   const label = tr(lang, str(d.difficulty_label).replace(" ", "_"));
   const chips: [string, string][] = [
@@ -81,12 +86,12 @@ export function PassCard({ overlay, lang }: PluginProps) {
         <span className="lt-arrow">→</span>
         <span className="lt-name">{str(d.receiver)}</span>
       </div>
-      <Chips items={chips} />
+      <Chips items={chips} mode={mode} />
     </>
   );
 }
 
-export function MomentumBar({ overlay, meta, lang }: PluginProps) {
+export function MomentumBar({ overlay, meta, lang, mode }: PluginProps) {
   const d = overlay.data;
   const side = (overlay.team ?? "HOME") as Side;
   const other: Side = side === "HOME" ? "AWAY" : "HOME";
@@ -101,9 +106,11 @@ export function MomentumBar({ overlay, meta, lang }: PluginProps) {
           <span style={{ width: `${share}%`, background: meta.teams[side].colors[0] }} />
           <span style={{ width: `${100 - share}%`, background: meta.teams[other].colors[0] }} />
         </div>
-        <span className="lt-tilt-label">
-          <b>{num(share)}%</b> {tr(lang, "final_third")}
-        </span>
+        {mode !== "casual" && (
+          <span className="lt-tilt-label">
+            <b>{num(share)}%</b> {tr(lang, "final_third")}
+          </span>
+        )}
       </div>
     </>
   );
@@ -145,14 +152,17 @@ interface Goal {
   team: Side;
 }
 
-export function RecapCard({ overlay, text, meta, lang }: PluginProps) {
+export function RecapCard({ overlay, text, meta, lang, mode }: PluginProps) {
   const d = overlay.data;
   const { HOME: home, AWAY: away } = meta.teams;
   const rows: [string, string, string, number, number][] = [
-    [tr(lang, "xg"), num(d.home_xg, 2), num(d.away_xg, 2), Number(d.home_xg) || 0, Number(d.away_xg) || 0],
     [tr(lang, "shots"), num(d.home_shots), num(d.away_shots), Number(d.home_shots) || 0, Number(d.away_shots) || 0],
     [tr(lang, "possession"), `${num(d.home_poss)}%`, `${num(d.away_poss)}%`, Number(d.home_poss) || 0, Number(d.away_poss) || 0],
   ];
+  if (mode !== "casual") {
+    const xg = [Number(d.home_xg) || 0, Number(d.away_xg) || 0];
+    rows.unshift([tr(lang, "xg"), num(d.home_xg, 2), num(d.away_xg, 2), xg[0], xg[1]]);
+  }
   const ratings = (d.ratings as Rating[] | undefined) ?? [];
   const goals = (d.goals as Goal[] | undefined) ?? [];
   const title = overlay.headline.toLowerCase().includes("half") ? tr(lang, "half_time") : tr(lang, "full_time");

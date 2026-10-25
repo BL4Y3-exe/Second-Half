@@ -78,11 +78,13 @@ async def live(
     away: str = "kingsmere",
     seed: int = 9,
     speed: float = Query(10.0, ge=1.0, le=60.0),
+    plant: bool = False,
 ) -> StreamingResponse:
-    """Server-Sent Events: meta, frame, event, trigger, stats and end messages for one live match."""
+    """Server-Sent Events: meta, frame, event, trigger, stats and end messages for one live match.
+    `plant=1` is the demo switch: wrong numbers are planted in some drafts for the Fact-checker to catch."""
     if home not in CLUBS or away not in CLUBS or home == away:
         raise HTTPException(400, f"pick two different clubs from {sorted(CLUBS)}")
-    match = hub.get_or_start(MatchKey(home, away, seed, speed))
+    match = hub.get_or_start(MatchKey(home, away, seed, speed, plant))
     queue = hub.subscribe(match)
 
     async def stream():

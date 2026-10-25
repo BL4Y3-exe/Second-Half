@@ -37,7 +37,8 @@ class Spotter:
         if not ready:
             return []
         self.pending = [tr for tr in self.pending if now - tr["t"] < SETTLE_S]
-        goal_shots = {e for tr in ready if tr["kind"] == "goal" for e in tr["source_events"]}
+        # The goal trigger comes a moment after the shot's own triggers, so it may still be settling.
+        goal_shots = {e for tr in ready + self.pending if tr["kind"] == "goal" for e in tr["source_events"]}
         out: list[tuple[Moment | None, dict, str]] = []
         for tr in sorted(ready, key=lambda r: (r["t"], r["priority"])):
             reason = self._reject_reason(tr, goal_shots)

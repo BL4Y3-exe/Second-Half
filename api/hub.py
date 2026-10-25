@@ -33,10 +33,11 @@ class MatchKey:
     away: str
     seed: int
     speed: float
+    plant: bool = False  # the demo switch that plants wrong numbers for the Fact-checker to catch
 
     @property
     def id(self) -> str:
-        return f"{self.home}-{self.away}-{self.seed}-x{self.speed:g}"
+        return f"{self.home}-{self.away}-{self.seed}-x{self.speed:g}" + ("-planted" if self.plant else "")
 
 
 @dataclass
@@ -59,7 +60,8 @@ class LiveMatch:
 
     def hello(self) -> list[tuple[str, dict]]:
         """What a new viewer needs before the live stream."""
-        out = [("meta", self.meta), ("stats", self.state.snapshot())]
+        momentum = [{"minute": h["minute"], "momentum": h["momentum"]} for h in self.state.history]
+        out = [("meta", self.meta), ("stats", self.state.snapshot()), ("history", {"momentum": momentum})]
         if self.last_frame is not None:
             out.append(("frame", self.last_frame))
         out += [("event", e) for e in self.state.events[-12:]]
@@ -96,11 +98,12 @@ class MatchHub:
             "teams": {"HOME": home.to_dict(), "AWAY": away.to_dict()},
             "model": model.name,
             "languages": ["en", "es"],
+            "planted_slips": key.plant,
         }
         state = MatchState(meta)
         live = LiveMatch(key, engine, state, meta)
         live.orchestrator = Orchestrator(state, live.publish, speed=key.speed, model=model, seed=key.seed,
-                                         languages=tuple(meta["languages"]))
+                                         languages=tuple(meta["languages"]), plant_slips=key.plant)
         live.agents_task = asyncio.create_task(live.orchestrator.run())
         live.task = asyncio.create_task(self._run(live))
         self.matches[key] = live

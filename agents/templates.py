@@ -42,16 +42,17 @@ STORY: dict[str, list[Rule]] = {
         (ALWAYS, "Pure power from {player}: {shot_speed_kmh} km/h from {distance_m} m out, {outcome_text}."),
     ],
     "killer_pass": [
-        (lambda f: f.get("lane_gap_m", 0) >= 1.0,
+        (lambda f: f.get("lane_gap_m", 0) >= 1.0 and f.get("progress_m", 0) > 0,
          "{passer} threads a {difficulty_label} pass ({difficulty:.2f} difficulty) to {receiver} through a "
          "{lane_gap_m} m gap, gaining {progress_m} m."),
-        (ALWAYS, "{passer} slips a {difficulty_label} pass past the defender to {receiver}, gaining {progress_m} m."),
+        (lambda f: f.get("progress_m", 0) > 0,  # a pass that splits a defence can still go sideways or back
+         "{passer} slips a {difficulty_label} pass past the defender to {receiver}, gaining {progress_m} m."),
         (ALWAYS, "Defence split: {passer} finds {receiver} with a {distance_m} m pass rated {difficulty:.2f} "
                  "for difficulty."),
     ],
     "momentum_swing": [
-        (has("shots_recent"), "{team} are on top: {final_third_recent} passes into the final third and "
-                              "{shots_recent} shots in the last 5 minutes, with {tilt_recent}% of the field tilt."),
+        (has("final_third_recent"), "{team} are on top: {final_third_recent} passes into the final third in the "
+                                    "last 5 minutes, and {tilt_recent}% of the field tilt."),
         (ALWAYS, "The game has turned towards {team}, who own {tilt_recent}% of the final-third passes over the last "
                  "5 minutes."),
     ],
@@ -135,8 +136,11 @@ PERSONA: dict[str, dict[str, dict[str, list[Rule]]]] = {
             "big_chance": [(ALWAYS, "Ocasión clarísima de {player}: {xg:.2f} xG desde {distance_m} m, "
                                     "pero {outcome_text_es}.")],
             "shot_speed": [(ALWAYS, "{player} dispara a {shot_speed_kmh} km/h desde {distance_m} m.")],
-            "killer_pass": [(ALWAYS, "{passer} encuentra a {receiver} con un pase de dificultad {difficulty:.2f} "
-                                     "que gana {progress_m} m.")],
+            "killer_pass": [(lambda f: f.get("progress_m", 0) > 0,
+                             "{passer} encuentra a {receiver} con un pase de dificultad {difficulty:.2f} "
+                             "que gana {progress_m} m."),
+                            (ALWAYS, "{passer} encuentra a {receiver} con un pase de {distance_m} m y dificultad "
+                                     "{difficulty:.2f}.")],
             "momentum_swing": [(ALWAYS, "{team} domina: {tilt_recent}% de los pases al último tercio en los últimos "
                                         "5 minutos.")],
             "sprint_speed": [(ALWAYS, "{player} alcanza {top_speed_kmh} km/h, el sprint más rápido del partido.")],

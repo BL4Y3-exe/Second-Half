@@ -1,3 +1,4 @@
+import { AGENT_NOTES, NOTES, TOTAL_NOTES } from "../notes";
 import type { Meta, TraceStep } from "../types";
 
 const AGENTS: Record<string, string> = {
@@ -8,6 +9,7 @@ const AGENTS: Record<string, string> = {
   director: "Director",
   persona: "Persona",
   recap: "Recap",
+  test: "Demo test",
 };
 
 interface Moment {
@@ -42,7 +44,9 @@ function outcome(m: Moment): { text: string; cls: string } {
   const dropped = m.steps.find((s) => s.action === "dropped");
   if (dropped) return { text: dropped.summary.startsWith("too late") ? "too late" : "held back", cls: "skipped" };
   if (m.steps.some((s) => s.status === "fallback")) return { text: "stat card", cls: "fallback" };
-  if (m.steps.some((s) => s.action === "no answer")) return { text: "scripted line", cls: "fallback" };
+  const recapScripted = m.steps.some((s) => s.agent === "recap" && s.action === "no answer");
+  if (recapScripted) return { text: "scripted line", cls: "fallback" };
+  if (m.steps.some((s) => s.agent === "test")) return { text: "planted & caught", cls: "rejected" };
   if (m.steps.some(caught)) return { text: "caught & fixed", cls: "rejected" };
   if (last.agent === "persona" || last.action === "scheduled") return { text: "on air", cls: "ok" };
   return { text: "working…", cls: "pending" };
@@ -60,14 +64,19 @@ export function TracePanel({ meta, trace }: { meta: Meta; trace: TraceStep[] }) 
     ["stat-card fallbacks", count((s) => s.status === "fallback"), "fallback"],
     ["held back", count((s) => s.status === "skipped"), "skipped"],
   ];
+  const planted = count((s) => s.status === "planted");
+  if (planted > 0) totals.push(["planted by the demo switch", planted, "planted"]);
   return (
     <div className="panel trace">
       <h3>
-        Agent trace <span className="model">model: {meta.model ?? "mock"}</span>
+        Agent trace
+        <span className="model" data-note={NOTES.model}>
+          model: {meta.model ?? "mock"}
+        </span>
       </h3>
       <div className="trace-totals">
         {totals.map(([label, n, cls]) => (
-          <span key={label} className={cls}>
+          <span key={label} className={cls} data-note={TOTAL_NOTES[label]}>
             <b>{n}</b> {label}
           </span>
         ))}
@@ -86,7 +95,9 @@ export function TracePanel({ meta, trace }: { meta: Meta; trace: TraceStep[] }) 
               <ol className="steps">
                 {m.steps.slice(1).map((s) => (
                   <li key={s.id} className={`step ${s.status}`}>
-                    <span className={`agent ${s.agent}`}>{AGENTS[s.agent] ?? s.agent}</span>
+                    <span className={`agent ${s.agent}`} data-note={AGENT_NOTES[s.agent]}>
+                      {AGENTS[s.agent] ?? s.agent}
+                    </span>
                     <span className="action">{s.action}</span>
                     <span className="summary">{s.summary}</span>
                     {s.ms >= 1 && <span className="ms">{duration(s.ms)}</span>}

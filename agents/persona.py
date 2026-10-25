@@ -7,7 +7,7 @@ import json
 import random
 from pathlib import Path
 
-from . import templates
+from . import style, templates
 from .fact_checker import FactChecker
 from .models import ModelClient, explain_failure
 from .types import Facts, Moment
@@ -24,36 +24,52 @@ class Persona:
         self.checker = checker
         self.languages = languages
 
-    async def render(self, moment: Moment, facts: Facts, approved: str) -> tuple[dict[str, dict[str, str]], list[str]]:
-        """Returns ({lang: {mode: text}}, notes about anything that fell back to a scripted line).
+    async def render(self, moment: Moment, facts: Facts,
+                     approved: str) -> tuple[dict[str, dict[str, str]], list[str], list[str]]:
+        """Returns ({lang: {mode: text}}, notes about versions that fell back to the scripted line, notes about
+        versions redrafted for the house style).
 
-        All versions are written at once. One that fails fact-checking, or whose model call fails, falls back
-        to the scripted line for that mode and language, which is built from the facts alone."""
+        All versions are written at once. One that is too busy or uses jargon its viewer won't know gets one
+        redraft. One that fails fact-checking, still breaks the house style, or whose model call fails falls
+        back to the scripted line for that mode and language, which is built from the facts alone."""
         jobs = [(lang, mode) for lang in self.languages for mode in MODES]
         results = await asyncio.gather(*(self._one(moment, facts, approved, lang, mode) for lang, mode in jobs))
         out: dict[str, dict[str, str]] = {lang: {} for lang in self.languages}
         notes: list[str] = []
-        for (lang, mode), (text, note) in zip(jobs, results, strict=True):
+        redrafts: list[str] = []
+        for (lang, mode), (text, note, redraft) in zip(jobs, results, strict=True):
             out[lang][mode] = text
             if note:
                 notes.append(f"{lang}/{mode}: {note}")
-        return out, notes
+            if redraft:
+                redrafts.append(f"{lang}/{mode}: {redraft}")
+        return out, notes, redrafts
 
-    async def _one(self, moment: Moment, facts: Facts, approved: str, lang: str, mode: str) -> tuple[str, str | None]:
+    async def _one(self, moment: Moment, facts: Facts, approved: str, lang: str,
+                   mode: str) -> tuple[str, str | None, str | None]:
         context = {"facts": facts.values, "kind": moment.kind, "clock": moment.clock, "mode": mode, "lang": lang,
                    "approved": approved}
         if lang == "en" and mode == "analyst":
-            return approved, None  # the Storyteller already wrote it for this viewer, and it passed fact-checking
+            return approved, None, None  # the Storyteller already wrote it for this viewer, and it passed both checks
         prompt = (f"Mode: {mode}. Language: {lang}.\nApproved text: {approved}\n"
                   f"Facts: {json.dumps(facts.for_model(), ensure_ascii=False)}")
-        try:
-            text = (await self.model.complete("persona", SYSTEM, prompt, context)).strip()
-        except Exception as exc:  # any model failure (timeout, quota, network) falls back the same way
-            return self._scripted(context), f"{explain_failure(exc)}; used the scripted line"
-        verdict = self.checker.check(text, facts)
-        if not verdict.approved:
-            return self._scripted(context), f"{verdict.problems[0]}; used the scripted line"
-        return text, None
+        redraft: str | None = None
+        for attempt in (1, 2):
+            try:
+                text = (await self.model.complete("persona", SYSTEM, prompt, context)).strip()
+            except Exception as exc:  # any model failure (timeout, quota, network) falls back the same way
+                return self._scripted(context), f"{explain_failure(exc)}; used the scripted line", redraft
+            verdict = self.checker.check(text, facts)
+            if not verdict.approved:
+                return self._scripted(context), f"{verdict.problems[0]}; used the scripted line", redraft
+            busy = style.problems(text, mode)
+            if not busy:
+                return text, None, redraft
+            if attempt == 2:
+                break
+            redraft = busy[0]
+            prompt += f"\nYour last version: {text}\nIt was sent back: it " + "; it ".join(busy)
+        return self._scripted(context), f"{busy[0]}; used the scripted line", redraft
 
     @staticmethod
     def _scripted(context: dict) -> str:

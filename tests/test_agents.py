@@ -4,6 +4,7 @@ import pytest
 
 from agents import MockModel, Orchestrator
 from agents.fact_checker import FactChecker
+from agents.spotter import Spotter
 from agents.types import Facts
 from mcp_server import MatchTools, list_plugins
 from simulator import MatchEngine, build_team
@@ -13,12 +14,14 @@ PITCH_X = (-3.0, 108.0)
 PITCH_Y = (-3.0, 71.0)
 
 
-def run_match(seed: int, model=None, until: float | None = None) -> tuple[Orchestrator, list[tuple[str, dict]]]:
+def run_match(seed: int, model=None, until: float | None = None,
+              plant_slips: bool = False) -> tuple[Orchestrator, list[tuple[str, dict]]]:
     """Plays a match through the stats engine and the agent team, the way the live server does."""
     engine = MatchEngine(build_team("harbourside", "HOME"), build_team("kingsmere", "AWAY"), seed=seed, frame_step=0.5)
     state = MatchState({"teams": {s: t.to_dict() for s, t in engine.teams.items()}})
     published: list[tuple[str, dict]] = []
-    orch = Orchestrator(state, lambda kind, data: published.append((kind, data)), speed=10, model=model, seed=seed)
+    orch = Orchestrator(state, lambda kind, data: published.append((kind, data)), speed=10, model=model, seed=seed,
+                        plant_slips=plant_slips)
 
     async def play() -> None:
         for tick in engine.run():
@@ -108,6 +111,18 @@ def test_telestrator_geometry_is_on_the_pitch(match):
             for x, y in (arrow["from"], arrow["to"]):
                 assert PITCH_X[0] <= x <= PITCH_X[1] and PITCH_Y[0] <= y <= PITCH_Y[1]
             assert tele["window"][0] <= arrow["t"] <= tele["window"][1]
+
+
+def test_a_goal_gets_a_goal_card_not_a_shot_card_as_well():
+    def trigger(kind: str, t: float, priority: int, events: list[str]) -> dict:
+        return {"id": f"tr-{kind}", "kind": kind, "t": t, "clock": "02:38", "priority": priority, "team": "AWAY",
+                "player": "a-09", "label": kind, "source_events": events}
+
+    spotter = Spotter()
+    spotter.watch(trigger("shot_speed", 158.3, 2, ["e-86", "e-84"]))
+    spotter.watch(trigger("goal", 158.9, 1, ["e-87", "e-86"]))  # the ball takes a moment to cross the line
+    assert [(m, why) for m, _tr, why in spotter.release(159.9)] == [(None, "part of a goal moment")]
+    assert [m.kind for m, _tr, _why in spotter.release(160.5)] == ["goal"]
 
 
 class LyingModel(MockModel):

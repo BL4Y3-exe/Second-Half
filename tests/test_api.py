@@ -41,7 +41,7 @@ def test_hub_streams_a_live_match():
         return seen
 
     seen = asyncio.run(watch())
-    assert seen["meta"] == 1
+    assert seen["meta"] == 1 and seen["history"] == 1  # a late viewer can still draw the momentum so far
     assert seen.get("event", 0) > 0
 
 

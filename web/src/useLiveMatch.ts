@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import type { Frame, MatchEvent, Meta, Overlay, Snapshot, TraceStep, Trigger } from "./types";
+import type { Frame, MatchEvent, Meta, MomentumPoint, Overlay, Snapshot, TraceStep, Trigger } from "./types";
 
 export interface MatchRequest {
   home: string;
   away: string;
   seed: number;
   speed: number;
+  plant: boolean; // the demo switch: plant wrong numbers for the Fact-checker to catch
   run: number; // bump to restart
 }
 
@@ -28,6 +29,7 @@ export function useLiveMatch(req: MatchRequest | null) {
   const [events, setEvents] = useState<MatchEvent[]>([]);
   const [triggers, setTriggers] = useState<Trigger[]>([]);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
+  const [momentum, setMomentum] = useState<MomentumPoint[]>([]);
   const [overlays, setOverlays] = useState<Overlay[]>([]);
   const [trace, setTrace] = useState<TraceStep[]>([]);
   const [status, setStatus] = useState<Status>("connecting");
@@ -39,6 +41,7 @@ export function useLiveMatch(req: MatchRequest | null) {
     setEvents([]);
     setTriggers([]);
     setSnapshot(null);
+    setMomentum([]);
     setOverlays([]);
     setTrace([]);
     setStatus("connecting");
@@ -50,6 +53,7 @@ export function useLiveMatch(req: MatchRequest | null) {
       seed: String(req.seed),
       speed: String(req.speed),
     });
+    if (req.plant) qs.set("plant", "1");
     const source = new EventSource(`/api/live?${qs}`);
     let pendingEvents: MatchEvent[] = [];
     const seenEvents = new Set<string>();
@@ -87,7 +91,19 @@ export function useLiveMatch(req: MatchRequest | null) {
       const tr: Trigger = JSON.parse((e as MessageEvent).data);
       setTriggers((old) => [...old, tr].slice(-100));
     });
-    source.addEventListener("stats", (e) => setSnapshot(JSON.parse((e as MessageEvent).data)));
+    source.addEventListener("stats", (e) => {
+      const snap: Snapshot = JSON.parse((e as MessageEvent).data);
+      setSnapshot(snap);
+      // One momentum point per minute played, like the server's history.
+      const minute = Math.floor(snap.t / 60);
+      setMomentum((old) =>
+        old.length && old[old.length - 1].minute >= minute ? old : [...old, { minute, momentum: snap.momentum }],
+      );
+    });
+    source.addEventListener("history", (e) => {
+      const { momentum: points }: { momentum: MomentumPoint[] } = JSON.parse((e as MessageEvent).data);
+      setMomentum((old) => [...points, ...old.filter((p) => p.minute > (points.at(-1)?.minute ?? -1))]);
+    });
     source.addEventListener("overlay", (e) => {
       const ov: Overlay = JSON.parse((e as MessageEvent).data);
       setOverlays((old) => (old.some((o) => o.id === ov.id) ? old : [...old, ov].slice(-60)));
@@ -110,5 +126,5 @@ export function useLiveMatch(req: MatchRequest | null) {
     };
   }, [req]);
 
-  return { meta, events, triggers, snapshot, overlays, trace, status, frames };
+  return { meta, events, triggers, snapshot, momentum, overlays, trace, status, frames };
 }
