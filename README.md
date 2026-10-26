@@ -22,6 +22,35 @@ Spanish-speaking casual Kingsmere fan one plain line. The strip along the
 bottom shows the agents behind the graphic, with the Fact-checker catching a
 planted wrong number.](docs/images/living-room.png)
 
+## What it does
+
+Every fan watching a match gets the same broadcast. The analyst wants xG and
+passing lanes; the fan on the sofa wants one clear line, in their language,
+about their club. Second Half gives each of them their own, live, from the
+same match. It covers the five stages the challenge asks for:
+
+| Stage | What Second Half does |
+| --- | --- |
+| Ingest events as they happen | The simulator streams passes, carries, shots, tackles, interceptions, pressure, possession changes and every player's position while the match plays. |
+| Interpret them | The stats engine turns them into xG, pass difficulty, shot and sprint speeds, momentum, field tilt, PPDA, counter-presses, the five lanes and each team's shape. |
+| Explain why a moment matters | Seven agents pick the moments worth a graphic and write why each one matters. A Fact-checker in plain code checks every number and name against the match data before anything goes on air. |
+| Render it next to the match | The Director picks a graphics plugin and its slot, times it so graphics never pile up, and draws the Telestrator replay from the real event positions. |
+| Personalize it | The Persona rewrites each story for Analyst, Casual fan or Player focus, in English or Spanish. A viewer who picks a club skips the other side's minor moments, and a second viewer can watch the same match their own way. |
+
+**Built with**
+
+- **Microsoft Foundry** hosts the model the three writing agents (Storyteller,
+  Persona, Recap) use.
+- **Microsoft Agent Framework** runs those three as agents on one shared
+  Foundry chat client.
+- **Model Context Protocol**: the Analyst gathers facts through 12 match
+  tools, which are also served at `/mcp` so GitHub Copilot or any MCP client
+  can ask about the live match.
+- **Azure Container Apps** runs the whole app as one container, with a
+  managed identity for Foundry, so there are no API keys anywhere.
+- **GitHub Actions** runs lint, tests and the web build on every push, then
+  publishes the image.
+
 ## Quickstart
 
 You need Python 3.11+ and, for the browser view, Node.js 20.19+ (or 22.12+).
@@ -427,6 +456,3 @@ shows which commit and model are running.
 You can also run the image yourself: `docker build -t second-half .` and
 `docker run -p 8000:8000 second-half`.
 
-## Licence
-
-MIT. See [LICENSE](LICENSE).
