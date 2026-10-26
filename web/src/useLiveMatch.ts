@@ -1,5 +1,17 @@
 import { useEffect, useRef, useState } from "react";
-import type { Frame, MatchEvent, Meta, MomentumPoint, Overlay, Snapshot, TraceStep, Trigger } from "./types";
+import type {
+  Frame,
+  HalfSpaceBall,
+  MatchEvent,
+  Meta,
+  MomentumPoint,
+  Overlay,
+  Press,
+  Snapshot,
+  TraceStep,
+  Trigger,
+  XY,
+} from "./types";
 
 export interface MatchRequest {
   home: string;
@@ -11,15 +23,23 @@ export interface MatchRequest {
 }
 
 export interface FrameBuffer {
-  prev: Frame | null;
-  cur: Frame | null;
-  arrivedAt: number; // performance.now() when `cur` arrived
-  interval: number; // expected ms between frames
-  history: Frame[]; // recent frames, for Telestrator replays
+  cur: Frame | null; // the newest frame
+  history: Frame[]; // recent frames: the pitch plays a little behind the newest, and replays from them
+  presses: Press[]; // recent counter-press windows and how they ended, drawn when the playback reaches them
+  spaces: HalfSpaceBall[]; // recent passes into a half-space in the final third, lit when the ball gets there
 }
 
 const HISTORY = 2400;
-const emptyBuffer = (): FrameBuffer => ({ prev: null, cur: null, arrivedAt: 0, interval: 83, history: [] });
+const emptyBuffer = (): FrameBuffer => ({ cur: null, history: [], presses: [], spaces: [] });
+
+/** A completed pass that lands in a half-space in the final third, timed for when the ball gets there. */
+function halfSpaceBall(ev: MatchEvent): HalfSpaceBall | null {
+  const lane = (ev.stats as { lane?: string } | undefined)?.lane;
+  if (ev.type !== "pass" || (lane !== "left_half_space" && lane !== "right_half_space") || !ev.team) return null;
+  const speed = Number(ev.ball_speed_kmh) / 3.6;
+  const flight = speed > 0 ? Number(ev.distance_m) / speed : 0;
+  return { id: ev.id, team: ev.team, t: ev.t + (Number.isFinite(flight) ? flight : 0), lane, to: ev.to as XY };
+}
 
 export type Status = "connecting" | "live" | "finished" | "error";
 
@@ -72,18 +92,21 @@ export function useLiveMatch(req: MatchRequest | null) {
     source.addEventListener("frame", (e) => {
       const f: Frame = JSON.parse((e as MessageEvent).data);
       const buf = frames.current;
-      const now = performance.now();
-      if (buf.cur) buf.interval = Math.min(250, Math.max(30, now - buf.arrivedAt));
-      buf.prev = buf.cur;
       buf.cur = f;
-      buf.arrivedAt = now;
       buf.history.push(f);
       if (buf.history.length > HISTORY + 200) buf.history.splice(0, 200);
+    });
+    source.addEventListener("press", (e) => {
+      const press: Press = JSON.parse((e as MessageEvent).data);
+      const buf = frames.current;
+      buf.presses = [...buf.presses.filter((p) => p.id !== press.id), press].slice(-20);
     });
     source.addEventListener("event", (e) => {
       const ev: MatchEvent = JSON.parse((e as MessageEvent).data);
       if (seenEvents.has(ev.id)) return; // a reconnect replays the latest events
       seenEvents.add(ev.id);
+      const space = halfSpaceBall(ev);
+      if (space) frames.current.spaces = [...frames.current.spaces, space].slice(-20);
       pendingEvents.push(ev);
       if (flushTimer === undefined) flushTimer = window.setTimeout(flush, 150);
     });

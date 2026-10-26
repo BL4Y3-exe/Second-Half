@@ -68,5 +68,5 @@ Keep the background transparent so the slot's frame shows through.
 - It only ever sees the data its manifest asked for.
 
 Test it by running `python -m api`, opening a match and waiting for one of
-your `moments`. `python -m agents --seed 9 --trace` shows when the Director
+your `moments`. `python -m agents --seed 7 --trace` shows when the Director
 picks it.

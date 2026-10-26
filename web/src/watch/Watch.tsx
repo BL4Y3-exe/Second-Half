@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import { LANGS, MODES, tr } from "../i18n";
 import { NOTES } from "../notes";
+import type { Next } from "../plugins/builtin";
 import type { Meta, Overlay, Snapshot, TraceStep } from "../types";
 import type { FrameBuffer, Status } from "../useLiveMatch";
 import { useDismiss } from "../useDismiss";
@@ -22,7 +23,8 @@ interface Props {
   setGuest: (s: ViewerSettings | null) => void;
   scoreBug: React.ReactNode;
   bar: React.ReactNode; // the view switch and match set-up, shared with the Analysis view
-  onTrace: () => void;
+  next: Next; // after the final whistle: the way to the match analysis
+  paused: boolean;
 }
 
 /** The guest a new second viewer starts as: a Spanish-speaking casual fan of the away side. */
@@ -97,11 +99,11 @@ export function Watch(props: Props) {
     setOnAir(ov);
     if (ov) setLastAired(ov);
   }, []);
-  const stage = { meta, frames, slots, overlays, snapshot, clock, status };
+  const stage = { meta, frames, slots, overlays, snapshot, clock, status, paused: props.paused };
   const shown = onAir ?? lastAired;
   return (
     <div className="tv">
-      <ViewerStage {...stage} settings={you} variant="tv" onAir={report} />
+      <ViewerStage {...stage} settings={you} variant="tv" onAir={report} next={props.next} />
       <div className="tv-top">
         <div className="tv-left">{props.scoreBug}</div>
         <div className="tv-centre">{props.bar}</div>
@@ -136,7 +138,6 @@ export function Watch(props: Props) {
         live={onAir !== null}
         steps={shown ? trace.filter((s) => s.moment_id === shown.moment_id) : []}
         lang={you.lang}
-        onTrace={props.onTrace}
       />
     </div>
   );

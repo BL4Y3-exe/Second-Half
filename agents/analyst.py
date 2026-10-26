@@ -6,6 +6,9 @@ The facts it returns are the only numbers and names a story may use.
 from __future__ import annotations
 
 from mcp_server import MatchTools
+from stats.counter_press import WINDOW_S
+from stats.lanes import HALF_SPACES
+from stats.state import SHOOT_AFTER_REGAIN_S
 
 from .types import Facts, Moment
 
@@ -68,12 +71,31 @@ class Analyst:
                      outcome_text_es=OUTCOME_ES[shot["outcome"]], body_part=shot["body_part"])
             seq = call("get_sequence", shot["id"])
             sequence = seq["events"]
+            won_back = sequence[0].get("stats", {}).get("won_back_s") if sequence else None
+            if won_back is not None and shot["t"] - sequence[0]["t"] <= SHOOT_AFTER_REGAIN_S:
+                f["won_back_s"] = round(won_back, 1)  # a counter-press made the chance
+            space = next((e["stats"]["lane"] for e in reversed(sequence)
+                          if e["type"] in ("pass", "carry") and e.get("stats", {}).get("lane") in HALF_SPACES), None)
+            if space is not None:  # the move came through a half-space in the final third
+                f["half_space"] = space.split("_")[0]
+                f["half_space_es"] = {"left": "izquierdo", "right": "derecho"}[f["half_space"]]
             if seq["passes"] >= 2:
                 f["passes"] = seq["passes"]
                 f["move_s"] = round(seq["duration_s"])
             assister = (goal or {}).get("assist") or shot.get("key_pass_by")
             if assister:
                 f["assist"] = self.tools.get_player_stats(assister)["name"]
+        elif moment.kind == "counter_press" and shot is not None:
+            regain = next((e for e in source if e["type"] == "possession_change"), None)
+            mine = self.tools.get_team_stats(moment.team)
+            f.update(won_back_s=round(float(moment.trigger["value"]), 1),
+                     shot_after_s=round(shot["t"] - regain["t"]) if regain else None,
+                     xg=round(shot["stats"]["xg"], 2), distance_m=round(shot["distance_m"]),
+                     outcome_text=OUTCOME_EN[shot["outcome"]], outcome_text_es=OUTCOME_ES[shot["outcome"]],
+                     counter_press_wins=mine["counter_press_wins"], counter_presses=mine["counter_presses"],
+                     press_window_s=int(WINDOW_S))
+            f = {k: v for k, v in f.items() if v is not None}
+            sequence = call("get_sequence", shot["id"])["events"]
         elif moment.kind == "killer_pass" and source:
             ps = source[0]
             st = ps["stats"]

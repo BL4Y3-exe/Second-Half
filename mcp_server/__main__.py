@@ -64,7 +64,7 @@ async def play(home: str, away: str, seed: int, minute: float | None) -> PlayedM
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="python -m mcp_server", description=__doc__.splitlines()[0])
-    parser.add_argument("--seed", type=int, default=9)
+    parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--home", default="harbourside", choices=sorted(CLUBS))
     parser.add_argument("--away", default="kingsmere", choices=sorted(CLUBS))
     parser.add_argument("--minute", type=float, default=None, help="stop the match here (default: full time)")

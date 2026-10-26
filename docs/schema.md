@@ -73,9 +73,43 @@ live feed:
 
 | Event | `stats` fields |
 |---|---|
-| `pass` | `difficulty` (0 to 1), `difficulty_label` (`easy`, `medium`, `hard`, `very hard`), `lane_gap_m`, `receiver_space_m`, `progress_m` |
+| `pass` | `difficulty` (0 to 1), `difficulty_label` (`easy`, `medium`, `hard`, `very hard`), `lane_gap_m`, `receiver_space_m`, `progress_m`; for a completed pass that ends in the final third, `lane` and, when it came from outside it, `final_third_entry: true` |
 | `shot`, `goal` | `xg` |
-| `carry` | `progress_m` |
+| `carry` | `progress_m`, plus `lane` and `final_third_entry` as for a pass |
+| `possession_change` | `won_back_s` when the team won the ball back within 8 s of losing it in the opponent's half (a counter-press) |
+
+## Counter-press (stats engine to browser)
+
+Sent as the `press` SSE event twice. First when a team loses the ball in open
+play in the opponent's half, with `outcome` `open` (`t` and `lost_t` both the
+moment it was lost), so the browser can draw the chase. Then, under the same
+`id`, when the counter-press is decided: the team won it back in open play
+between 1 and 8 s later (`won`; any quicker and the ball only bounced back) or
+went after it with at least three players within 5 m of the ball and still lost
+it (`escaped`). A window that ends any other way is never sent again; it closes
+8 s after `lost_t`.
+
+```json
+{"id": "cp-0007", "team": "HOME", "t": 1583.6, "lost_t": 1580.4, "clock": "26:23", "period": 1,
+ "outcome": "won", "seconds": 3.2, "at": [78.4, 30.1], "pressers": 3, "event": "e-00815",
+ "player": "h-08"}
+```
+
+`at` is where the ball was when it was decided; `event` is the
+`possession_change` that won it back and `player` the one who won it (both null
+while open or when it escaped). Team stats carry
+`counter_presses`, `counter_press_wins` and `counter_press_win_pct`.
+
+## Lanes
+
+The pitch is split along its length into five lanes by lines along the sides
+of the penalty area and the six-yard box (y = 13.84, 24.84, 43.16 and
+54.16 m). A `lane` is named from the attacking team's side: `left_wing`,
+`left_half_space`, `centre`, `right_half_space`, `right_wing`. With y = 0 along
+the top touchline, a team attacking towards x = 105 has its left wing at the
+top. Team stats carry `final_third_entries`, a count per lane of the passes and
+carries that took the ball into the final third. Goal and chance graphics carry
+`half_space` (`left` or `right`) when the move came through one.
 
 ## Trigger (stats engine to Spotter agent)
 
@@ -87,6 +121,9 @@ live feed:
 
 Kinds: `goal`, `big_chance` (xG 0.3+ and not scored), `momentum_swing`,
 `shot_speed` (100 km/h+), `killer_pass` (hard pass into the final 25 m),
+`counter_press` (a ball won back within 8 s, then a shot within 10 s; `value` is
+the seconds it took to win it back; when the move ends in a big chance or a goal,
+that moment's card gets `won_back_s` and the counter-press is not shown on its own),
 `sprint_speed` (new fastest sprint of the match, 32 km/h+, after 5 minutes),
 `distance_10k` (first three players past 10 km). Priority 1 must be shown,
 2 is worth showing, 3 is filler.
@@ -125,6 +162,12 @@ One graphic the Director scheduled. Sent as the `overlay` SSE event.
   `data.line_es` hold its text). `fallback_reason` then says which: `fact_check` or `no_answer`.
 - `text[lang][mode]` is the Persona agent's version for each viewer mode
   (`analyst`, `casual`, `player`) and language.
+- A `recap-card` at half time also carries `data.shapes`: for `HOME` and
+  `AWAY`, the first-half average shape `on` the ball and `off` it, each
+  `{"positions": [[x, y], ...], "formation": "4-2-3-1", "back_line_m": 28,
+  "length_m": 39}`. Positions are by lineup slot, goalkeeper first, in
+  metres with the team attacking left to right (x from its own goal line);
+  `back_line_m` is how high its back line sat, `length_m` is back to front.
 - `plugin_info` is only present for an outside plugin, which the browser
   runs sandboxed: `{"builtin": false, "name", "author", "entry", "height_px"}`.
   See [plugins.md](plugins.md).

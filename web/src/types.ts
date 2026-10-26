@@ -76,7 +76,38 @@ export interface TeamStats {
   fouls: number;
   field_tilt_pct: number;
   ppda: number | null;
+  counter_presses: number;
+  counter_press_wins: number;
+  counter_press_win_pct: number | null;
+  final_third_entries: Record<Lane, number>; // passes and carries into the final third, by the lane they arrive in
   distance_km: number;
+}
+
+export type Lane = "left_wing" | "left_half_space" | "centre" | "right_half_space" | "right_wing";
+export const LANES: Lane[] = ["left_wing", "left_half_space", "centre", "right_half_space", "right_wing"];
+
+/** A pass received in a half-space in the final third, which the pitch lights up. */
+export interface HalfSpaceBall {
+  id: string; // the pass
+  team: Side;
+  t: number; // match time the ball arrived
+  lane: "left_half_space" | "right_half_space";
+  to: XY;
+}
+
+/** A team that lost the ball in the opponent's half and went after it: won back within 8 s, or escaped. */
+export interface Press {
+  id: string;
+  team: Side; // the team pressing
+  t: number; // match time it was decided
+  lost_t: number;
+  clock: string;
+  period: number;
+  outcome: "open" | "won" | "escaped"; // open: just lost, the 8 s are running; then a record if it was a press
+  seconds: number; // from losing the ball to winning it back (or to the end of the 8 s)
+  at: XY; // where the ball was then
+  pressers: number;
+  player: string | null; // who won it back
 }
 
 export interface Snapshot {

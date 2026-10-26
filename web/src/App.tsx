@@ -1,41 +1,75 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Analysis } from "./analysis/Analysis";
 import { LANGS, MODES } from "./i18n";
 import { MatchSetup, type MatchForm } from "./MatchSetup";
 import { NoteTip } from "./NoteTip";
 import { NOTES } from "./notes";
 import { ScoreBug } from "./overlays/ScoreBug";
-import type { Club, Lang, Mode, Side } from "./types";
+import type { Club, Lang, Mode, Side, Snapshot } from "./types";
 import { useLiveMatch, type MatchRequest } from "./useLiveMatch";
 import { type ViewerSettings } from "./Viewer";
 import { GUEST, Watch } from "./watch/Watch";
 
 type View = "watch" | "analysis";
 
+// Match seconds per viewing second unless the viewer picks another: a whole match takes about 8 minutes, with time for
+// the agents to write each graphic before the next moment comes along.
+const SPEED = 8;
+const TO_ANALYSIS_S = 15; // seconds the full-time card stays up before the page moves on to the analysis
+
+/** The broadcast clock in whole match minutes, 01' from kick-off; stoppage time reads 45+2' or 90+3'. */
+function minuteClock(clock: string, period: number): string {
+  const minute = Number(clock.split(":")[0]) + 1;
+  const end = period >= 2 ? 90 : 45;
+  return minute > end ? `${end}+${minute - end}'` : `${String(minute).padStart(2, "0")}'`;
+}
+
 export default function App() {
   const [clubs, setClubs] = useState<Club[]>([]);
   const [form, setForm] = useState<MatchForm>({
     home: "harbourside",
     away: "kingsmere",
-    seed: 9,
-    speed: 10,
+    seed: 7,
+    speed: SPEED,
     plant: false,
   });
   const [req, setReq] = useState<MatchRequest | null>(null);
   const [view, setView] = useState<View>("watch");
+  const [countdown, setCountdown] = useState<number | null>(null); // seconds until the page moves on after full time
   const [you, setYou] = useState<ViewerSettings>({ mode: "analyst", lang: "en", favourite: null });
   const [guest, setGuest] = useState<ViewerSettings | null>(null);
   const live = useLiveMatch(req);
-  const { meta, events, snapshot, status } = live;
+  const { meta, events, status } = live;
+  // Paused, the screen holds the numbers it had at that moment while the match plays on behind it.
+  const [pause, setPause] = useState<{ snapshot: Snapshot | null } | null>(null);
+  const paused = pause !== null;
+  const snapshot = pause ? pause.snapshot : live.snapshot;
+  const latest = useRef(live.snapshot);
+  latest.current = live.snapshot;
+  const togglePause = useCallback(() => setPause((p) => (p ? null : { snapshot: latest.current })), []);
 
   useEffect(() => {
-    // ?seed=7&speed=20&mode=casual&lang=es&fav=HOME&view=analysis&guest=1&plant=1 in the address bar
-    // sets up the screen.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== "Space" || e.repeat) return;
+      // A focused control keeps Space for itself.
+      if ((e.target as HTMLElement).closest?.("button, input, select, textarea, a, [contenteditable]")) return;
+      e.preventDefault();
+      togglePause();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [togglePause]);
+
+  useEffect(() => {
+    // ?home=ashford&away=northgate&seed=7&speed=20&mode=casual&lang=es&fav=HOME&view=analysis&guest=1&plant=1 in the
+    // address bar sets up the screen.
     const params = new URLSearchParams(window.location.search);
     const start = {
       ...form,
+      home: params.get("home") ?? form.home,
+      away: params.get("away") ?? form.away,
       seed: Number(params.get("seed") ?? form.seed),
-      speed: Number(params.get("speed") ?? form.speed),
+      speed: Math.min(60, Math.max(1, Number(params.get("speed")) || form.speed)),
       plant: params.get("plant") === "1",
     };
     setForm(start);
@@ -59,6 +93,7 @@ export default function App() {
   }, []);
 
   const switchView = (v: View) => {
+    setCountdown(null);
     setView(v);
     const url = new URL(window.location.href);
     url.searchParams.delete("tab");
@@ -82,14 +117,50 @@ export default function App() {
   }, [meta, events]);
 
   const lastEvent = events[events.length - 1];
-  const clock = snapshot?.clock ?? lastEvent?.clock ?? "00:00";
+  const clock = snapshot
+    ? minuteClock(snapshot.clock, snapshot.period)
+    : lastEvent
+      ? minuteClock(lastEvent.clock, lastEvent.period)
+      : "00'";
   // Match seconds when the second half kicked off: the clock restarts at 45:00 then, whatever the stoppage time.
   let secondHalfAt: number | null = null;
   if (snapshot && snapshot.period >= 2) {
     const [mm, ss] = snapshot.clock.split(":").map(Number);
     secondHalfAt = Math.round(snapshot.t - (mm * 60 + ss - 45 * 60));
   }
-  const kickOff = () => setReq({ ...form, run: (req?.run ?? 0) + 1 });
+  // Each kick-off is a new match. Its number goes in the address bar, so the link replays it.
+  const kickOff = () => {
+    const next = { ...form, seed: Math.floor(Math.random() * 9999) + 1 };
+    setPause(null);
+    setForm(next);
+    setReq({ ...next, run: (req?.run ?? 0) + 1 });
+    const url = new URL(window.location.href);
+    url.searchParams.set("home", next.home);
+    url.searchParams.set("away", next.away);
+    url.searchParams.set("seed", String(next.seed));
+    if (next.speed !== SPEED) url.searchParams.set("speed", String(next.speed));
+    else url.searchParams.delete("speed");
+    if (next.plant) url.searchParams.set("plant", "1");
+    else url.searchParams.delete("plant");
+    window.history.replaceState(null, "", url);
+  };
+
+  // After the final whistle the Watch page shows the full-time card, then moves on to the match analysis.
+  const viewNow = useRef(view);
+  viewNow.current = view;
+  useEffect(() => {
+    setCountdown(status === "finished" && viewNow.current === "watch" ? TO_ANALYSIS_S : null);
+  }, [status]);
+  useEffect(() => {
+    if (countdown === null) return;
+    if (countdown <= 0) {
+      switchView("analysis");
+      return;
+    }
+    const timer = window.setTimeout(() => setCountdown((s) => (s === null ? null : s - 1)), 1000);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [countdown]);
 
   const bar = (
     <div className="bar">
@@ -107,6 +178,20 @@ export default function App() {
           </button>
         ))}
       </div>
+      {meta && (
+        <button
+          type="button"
+          className={`pause-button${paused ? " on" : ""}`}
+          aria-pressed={paused}
+          onClick={togglePause}
+          data-note={paused ? NOTES.resume : NOTES.pause}
+        >
+          <svg viewBox="0 0 10 10" aria-hidden="true">
+            {paused ? <path d="M2 1 L9 5 L2 9 Z" /> : <path d="M2 1 h2 v8 h-2 Z M6 1 h2 v8 h-2 Z" />}
+          </svg>
+          {paused ? "Live" : "Pause"}
+        </button>
+      )}
       <MatchSetup clubs={clubs} form={form} setForm={setForm} onKickOff={kickOff} playing={meta} />
     </div>
   );
@@ -120,6 +205,8 @@ export default function App() {
         {meta ? (
           <Watch
             {...live}
+            snapshot={snapshot}
+            paused={paused}
             meta={meta}
             slots={slots}
             clock={clock}
@@ -136,7 +223,7 @@ export default function App() {
               </>
             }
             bar={bar}
-            onTrace={() => switchView("analysis")}
+            next={{ go: () => switchView("analysis"), seconds: countdown }}
           />
         ) : (
           <div className="tv tv-waiting">
@@ -176,6 +263,8 @@ export default function App() {
       {meta ? (
         <Analysis
           {...live}
+          snapshot={snapshot}
+          paused={paused}
           meta={meta}
           slots={slots}
           clock={clock}

@@ -12,8 +12,12 @@ import math
 from collections import defaultdict
 
 from .control_chaos import ControlChaos
+from .counter_press import CounterPress
+from .lanes import FINAL_THIRD_X, lane
+from .lanes import empty as no_lanes
 from .momentum import Momentum, other
 from .passes import difficulty, difficulty_label, lane_gap, receiver_space
+from .shape import ShapeTracker
 from .speed import SpeedTracker
 from .xg import shot_xg
 
@@ -25,10 +29,11 @@ DISTANCE_TRIGGER_M = 10_000
 BIG_CHANCE_XG = 0.3
 KILLER_PASS_DIFFICULTY = 0.6
 DISTANCE_TRIGGER_LIMIT = 3  # only the first few players past 10 km are news
+SHOOT_AFTER_REGAIN_S = 10.0  # Rangnick: win it back within 8 seconds, then shoot within 10
 
 # 1 = must show, 2 = worth showing, 3 = filler. The Spotter agent starts from this.
 PRIORITY = {"goal": 1, "big_chance": 1, "momentum_swing": 2, "shot_speed": 2, "killer_pass": 2,
-            "sprint_speed": 2, "distance_10k": 3}
+            "counter_press": 2, "sprint_speed": 2, "distance_10k": 3}
 
 PLAYER_COUNTERS = (
     "passes", "passes_complete", "key_passes", "shots", "shots_on_target", "goals", "assists", "tackles",
@@ -64,6 +69,10 @@ class MatchState:
         self.speed = SpeedTracker()
         self.control = ControlChaos()
         self.momentum = Momentum()
+        self.counter_press = CounterPress()
+        self._regain: dict | None = None  # the last ball won back by counter-pressing, until possession changes
+        self.lane_entries = {s: no_lanes() for s in SIDES}  # balls into the final third, by the lane they arrive in
+        self.shape = ShapeTracker()
 
         self.possession: str | None = None
         self._poss_since = 0.0
@@ -94,6 +103,12 @@ class MatchState:
     def apply_frame(self, frame: dict) -> list[dict]:
         self.last_frame = frame
         self._advance(frame["t"], frame["period"])
+        self.shape.frame(frame["period"], self.possession, frame["p"])
+        chasing = self.counter_press.window
+        if chasing is not None:
+            pos = self.positions()
+            players = {pid: pos[pid] for pid in self.slots[chasing["team"]] if pid in pos}
+            self.counter_press.frame(frame["t"], (frame["b"][0], frame["b"][1]), players, self.clock)
         out = []
         for pid, kind, value in self.speed.update(frame["t"], self.positions(), frame["period"]):
             # Only a new fastest-of-the-match sprint above the threshold is news.
@@ -137,6 +152,7 @@ class MatchState:
                 tc["passes_complete"] += 1
                 if stats["progress_m"] > 0 and self._att_x(side, ev["to"][0]) > 70:
                     tc["final_third_passes"] += 1
+                self._lane(side, ev, stats)
                 if stats["difficulty"] >= KILLER_PASS_DIFFICULTY and self._att_x(side, ev["to"][0]) > 80:
                     triggers.append(self._trigger("killer_pass", side, pid, stats["difficulty"],
                                                   f"{self._name(pid)} threads a {stats['difficulty_label']} pass "
@@ -158,6 +174,13 @@ class MatchState:
                 self.team[side]["key_passes"] += 1
                 self.player[kp]["xa"] += xg
             source = [ev["id"]] + ([self._last_pass["id"]] if self._last_pass and kp else [])
+            regain = self._regain
+            if regain is not None and regain["team"] == side and ev["t"] - regain["t"] <= SHOOT_AFTER_REGAIN_S:
+                self._regain = None  # one story per ball won back
+                label = (f"{self.teams[side]['short']} win it back in {regain['seconds']:.1f} s and "
+                         f"{self._name(pid)} shoots {ev['t'] - regain['t']:.0f} s later")
+                triggers.append(self._trigger("counter_press", side, pid, regain["seconds"], label,
+                                              [regain["event"], *source]))
             if xg >= BIG_CHANCE_XG and ev["outcome"] != "goal":
                 outcome = ev["outcome"].replace("_", " ")
                 label = f"Big chance: {self._name(pid)} ({xg:.2f} xG), {outcome}"
@@ -178,6 +201,7 @@ class MatchState:
                                           [ev["id"]] + ([shot["id"]] if shot else [])))
         elif typ == "carry":
             stats = {"progress_m": _r(self._att_x(side, ev["to"][0]) - self._att_x(side, ev["from"][0]), 1)}
+            self._lane(side, ev, stats)
             pc["carries"] += 1
             tc["carries"] += 1
         elif typ == "tackle":
@@ -212,6 +236,12 @@ class MatchState:
             self._advance(ev["t"], ev["period"])
             self.finished = True
 
+        regained = self.counter_press.event(ev, self.clock)
+        if regained is not None:
+            stats["won_back_s"] = regained["seconds"]
+            self._regain = regained
+        elif typ == "possession_change":
+            self._regain = None
         self.control.update(ev)
         swing = self.momentum.update(ev, stats.get("xg"))
         if swing is not None and ev["t"] > 120:
@@ -251,6 +281,16 @@ class MatchState:
 
     def _att_x(self, side: str, x: float) -> float:
         return x if Momentum.attack_dir(side, self.period) > 0 else 105.0 - x
+
+    def _lane(self, side: str, ev: dict, stats: dict) -> None:
+        """Name the lane a completed pass or a carry ends in when that is the final third; count final-third entries."""
+        start, end = self._att_x(side, ev["from"][0]), self._att_x(side, ev["to"][0])
+        if end <= FINAL_THIRD_X:
+            return
+        stats["lane"] = lane(ev["to"][1], Momentum.attack_dir(side, self.period))
+        if start <= FINAL_THIRD_X:
+            stats["final_third_entry"] = True
+            self.lane_entries[side][stats["lane"]] += 1
 
     def _name(self, pid: str | None) -> str:
         return self.players[pid]["name"] if pid in self.players else "?"
@@ -307,6 +347,8 @@ class MatchState:
         out["possession_pct"] = self.possession_pct()[side]
         out["high_turnovers"] = self.momentum.high_turnovers[side]
         out["ppda"] = self.momentum.ppda()[side]
+        out.update(self.counter_press.stats(side))
+        out["final_third_entries"] = dict(self.lane_entries[side])
         mine, theirs = c["final_third_passes"], self.team[other(side)]["final_third_passes"]
         out["field_tilt_pct"] = round(100 * mine / (mine + theirs), 1) if mine + theirs else 50.0
         out["distance_km"] = round(sum(self.speed.runners[p].distance_m for p in self.speed.runners

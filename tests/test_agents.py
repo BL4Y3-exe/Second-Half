@@ -67,6 +67,27 @@ def test_every_goal_gets_a_card_and_both_halves_a_recap(match):
     assert recaps[-1]["data"]["score_home"] == orch.state.score["HOME"]
 
 
+def test_the_half_time_recap_shows_both_shapes(match):
+    _orch, published = match
+    half, full = [d for kind, d in published if kind == "overlay" and d["plugin"] == "recap-card"]
+    for side in ("HOME", "AWAY"):
+        for state in ("on", "off"):
+            shape = half["data"]["shapes"][side][state]
+            assert len(shape["positions"]) == 11 and shape["formation"].count("-") >= 2
+    assert "shapes" not in full["data"]
+
+
+def test_fact_checker_reads_a_formation_whole():
+    checker = FactChecker({})
+    facts = Facts("m-1", {"away_shape_on": "4-2-3-1", "away_shape_off": "4-2-4", "away_line_on_m": 28,
+                          "away_line_off_m": 22, "score_home": 2, "score_away": 0})
+    assert checker.check("Without the ball they went from 4-2-3-1 to 4-2-4 and dropped from 28 m to 22 m. 2-0.",
+                         facts).approved
+    wrong = checker.check("Without the ball they switched to a 4-3-3.", facts)
+    assert not wrong.approved and "4-3-3" in wrong.problems[0]
+    assert not checker.check("It is 3-0.", facts).approved  # a score is still two numbers
+
+
 def test_overlays_carry_checked_text_for_every_viewer(match):
     _orch, published = match
     plugins = {p["id"] for p in list_plugins()}
@@ -125,6 +146,24 @@ def test_a_goal_gets_a_goal_card_not_a_shot_card_as_well():
     assert [m.kind for m, _tr, _why in spotter.release(160.5)] == ["goal"]
 
 
+def test_counter_press_waits_for_its_move_and_folds_into_a_bigger_chance():
+    def trigger(kind: str, t: float, priority: int, events: list[str]) -> dict:
+        return {"id": f"tr-{kind}-{t}", "kind": kind, "t": t, "clock": "69:21", "priority": priority,
+                "team": "AWAY", "player": "a-09", "label": kind, "source_events": events}
+
+    spotter = Spotter()
+    spotter.watch(trigger("counter_press", 4161.0, 2, ["e-40", "e-44"]))
+    spotter.watch(trigger("shot_speed", 4161.0, 2, ["e-44"]))  # same shot: decided with the counter-press
+    assert spotter.release(4163.0) == []
+    spotter.watch(trigger("big_chance", 4165.6, 1, ["e-47"]))  # the rebound
+    released = [(m.kind if m else None, why) for m, _tr, why in spotter.release(4169.5)]
+    assert released == [(None, "part of a bigger chance"), ("shot_speed", "flagged"), ("big_chance", "flagged")]
+    # On its own, a counter-press goes on air once its move is over.
+    spotter.watch(trigger("counter_press", 4400.0, 2, ["e-90", "e-93"]))
+    assert spotter.release(4405.0) == []
+    assert [m.kind for m, _tr, _why in spotter.release(4408.5)] == ["counter_press"]
+
+
 class LyingModel(MockModel):
     """A Storyteller that always gets the distance wrong."""
 
@@ -176,3 +215,44 @@ def test_director_falls_back_to_builtin_without_match_tools():
     moment = Moment("m-1", "momentum_swing", 600.0, "10:00", 2, "HOME", None, "Momentum", {})
     item, _why = Director(speed=10).direct(moment, Facts("m-1", {"team_short": "HAR"}), now=600.0, fallback=False)
     assert item["plugin"] == "momentum-bar" and "plugin_info" not in item
+
+
+def test_every_moment_kind_has_stories_and_a_card():
+    from agents import templates
+    from agents.director import PLUGIN_FOR
+    from stats.state import PRIORITY
+
+    plugins = {p["id"] for p in list_plugins()}
+    for kind in PRIORITY:
+        assert templates.STORY[kind] and kind in templates.FALLBACK and kind in templates.FALLBACK_ES
+        assert PLUGIN_FOR[kind] in plugins
+        for lang, modes in templates.PERSONA.items():
+            for mode, kinds in modes.items():
+                assert kind in kinds, f"no {lang} {mode} line for {kind}"
+
+
+def test_counter_press_moment_goes_on_air_checked():
+    _orch, published = run_match(seed=6, model=MockModel(seed=6, mistake_rate=0.0), until=900)
+    cards = [d for kind, d in published if kind == "overlay" and d["kind"] == "counter_press"]
+    assert cards, "seed 6 has a ball won back and shot at within the Rangnick window"
+    card = cards[0]
+    assert card["plugin"] == "press-card" and not card["fallback"]
+    assert card["data"]["won_back_s"] <= 8 and card["data"]["counter_press_wins"] >= 1
+    assert any(z["label"] == "won back" for z in card["telestrator"]["zones"])
+
+
+def test_a_goal_that_came_through_a_half_space_says_so():
+    # Seed 1, 38:14: the move into the box goes through Kingsmere's right half-space.
+    _orch, published = run_match(seed=1, model=MockModel(seed=1, mistake_rate=0.0), until=2400)
+    goal = next(d for kind, d in published if kind == "overlay" and d["kind"] == "goal" and d["clock"] == "38:14")
+    assert goal["data"]["half_space"] == "right"
+
+
+def test_counter_press_that_makes_a_big_chance_goes_on_the_chance_card():
+    # Seed 1, 69:21: Kingsmere win it back, shoot, win it back again and have a 0.93 xG chance saved.
+    _orch, published = run_match(seed=1, model=MockModel(seed=1, mistake_rate=0.0), until=4400)
+    overlays = [d for kind, d in published if kind == "overlay"]
+    assert not [d for d in overlays if d["kind"] == "counter_press" and d["clock"].startswith("69:")]
+    chance = next(d for d in overlays if d["kind"] == "big_chance" and d["clock"].startswith("69:"))
+    assert chance["data"]["won_back_s"] <= 8
+    assert any(z["label"] == "won back" for z in chance["telestrator"]["zones"])

@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Overlay, Side } from "./types";
 import type { FrameBuffer } from "./useLiveMatch";
 
 export interface ScheduleOptions {
   speed: number; // match seconds per viewing second
   favourite: Side | null; // hide minor items about the other club
+  paused: boolean; // the viewer has stopped the picture: nothing comes, goes or counts down
+  finished: boolean; // the match is over: no more frames come, so whatever was sent is due
 }
 
 export interface OnAir {
@@ -32,10 +34,11 @@ export function useOverlaySchedule(
   overlays: Overlay[],
   frames: React.RefObject<FrameBuffer>,
   opts: ScheduleOptions,
-): Record<string, OnAir> {
+): { onAir: Record<string, OnAir>; dismiss: (slot: string) => void } {
   const [active, setActive] = useState<Record<string, OnAir>>({});
   const showing = useRef<Record<string, OnAir>>({});
   const done = useRef(new Set<string>());
+  const pausedAt = useRef<number | null>(null);
 
   const fresh = overlays.length === 0;
   useEffect(() => {
@@ -45,8 +48,32 @@ export function useOverlaySchedule(
     setActive({});
   }, [fresh]);
 
+  // Paused, whatever is on screen keeps the time it had left.
+  useEffect(() => {
+    if (opts.paused) {
+      pausedAt.current = performance.now();
+      return;
+    }
+    if (pausedAt.current === null) return;
+    const held = performance.now() - pausedAt.current;
+    pausedAt.current = null;
+    for (const [slot, item] of Object.entries(showing.current)) {
+      showing.current[slot] = { ...item, startedAt: item.startedAt + held };
+    }
+    setActive({ ...showing.current });
+  }, [opts.paused]);
+
+  const dismiss = useCallback((slot: string) => {
+    const item = showing.current[slot];
+    if (!item) return;
+    done.current.add(item.overlay.id);
+    delete showing.current[slot];
+    setActive({ ...showing.current });
+  }, []);
+
   useEffect(() => {
     const timer = window.setInterval(() => {
+      if (pausedAt.current !== null) return;
       const t = frames.current?.cur?.t ?? 0;
       const now = performance.now();
       const on = showing.current;
@@ -61,7 +88,9 @@ export function useOverlaySchedule(
       }
 
       const due = overlays
-        .filter((ov) => !done.current.has(ov.id) && ov.show_at <= t && on[ov.slot]?.overlay.id !== ov.id)
+        // After the whistle no frame reaches the full-time recap's time, so a full-screen card is due anyway.
+        .filter((ov) => !done.current.has(ov.id) && (ov.show_at <= t || (opts.finished && ov.slot === "full-screen")))
+        .filter((ov) => on[ov.slot]?.overlay.id !== ov.id)
         .sort((a, b) => a.show_at - b.show_at);
       for (const ov of due) {
         const hidden = opts.favourite && ov.team && ov.team !== opts.favourite && ov.priority > 1;
@@ -79,7 +108,7 @@ export function useOverlaySchedule(
       if (changed) setActive({ ...on });
     }, 150);
     return () => window.clearInterval(timer);
-  }, [overlays, frames, opts.favourite, opts.speed]);
+  }, [overlays, frames, opts.favourite, opts.speed, opts.finished]);
 
-  return active;
+  return { onAir: active, dismiss };
 }

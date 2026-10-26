@@ -4,7 +4,7 @@ import { favouriteNote, LANG_NOTES, MODE_NOTES, NOTES, VIEWER_GROUPS } from "./n
 import { OverlayLayer } from "./overlays/OverlayLayer";
 import { ScoreBug } from "./overlays/ScoreBug";
 import { Pitch, type Pin, type Replay } from "./pitch/Pitch";
-import { pinValue } from "./plugins/builtin";
+import { AnalysisButton, type Next, pinValue } from "./plugins/builtin";
 import type { Lang, Meta, Mode, Overlay, Side, Snapshot } from "./types";
 import type { FrameBuffer, Status } from "./useLiveMatch";
 import { useOverlaySchedule } from "./useOverlaySchedule";
@@ -122,11 +122,16 @@ interface StageProps {
   variant?: "tv" | "pip" | "flat";
   /** Told which item is on screen, so the page can show how the agents made it. */
   onAir?: (overlay: Overlay | null) => void;
+  /** The viewer has stopped the picture to look at a moment. */
+  paused?: boolean;
+  /** After the final whistle: the way to the match analysis. */
+  next?: Next;
 }
 
 /** A Telestrator zone's label in the viewer's language; a casual viewer doesn't get the xG one. */
 function zoneLabel(label: string | undefined, mode: Mode, lang: Lang): string | undefined {
   if (label === "the gap") return tr(lang, "the_gap");
+  if (label === "won back") return tr(lang, "won_back");
   if (mode === "casual" && label?.endsWith("xG")) return undefined;
   return label;
 }
@@ -134,8 +139,10 @@ function zoneLabel(label: string | undefined, mode: Mode, lang: Lang): string | 
 /** One viewer's screen: the pitch with the score bug and the graphics the schedule puts on air for them. */
 export function ViewerStage(props: StageProps) {
   const { meta, frames, slots, overlays, snapshot, clock, status, settings, variant = "flat", onAir: report } = props;
+  const paused = props.paused ?? false;
   const { mode, lang, favourite } = settings;
-  const onAir = useOverlaySchedule(overlays, frames, { speed: meta.speed, favourite });
+  const finished = status === "finished";
+  const { onAir, dismiss } = useOverlaySchedule(overlays, frames, { speed: meta.speed, favourite, paused, finished });
   const showing = onAir["lower-third"]?.overlay ?? onAir["pitch"]?.overlay ?? onAir["full-screen"]?.overlay ?? null;
   useEffect(() => report?.(showing), [report, showing]);
 
@@ -155,15 +162,21 @@ export function ViewerStage(props: StageProps) {
   const pin: Pin | null =
     tagged?.player != null ? { player: tagged.player, title: tr(lang, tagged.kind), value: pinValue(tagged) } : null;
 
+  const pitch = (
+    <Pitch
+      meta={meta}
+      frames={frames}
+      slots={slots}
+      replay={replay}
+      pin={pin}
+      paused={paused}
+      shapes={mode === "analyst"}
+      lang={lang}
+    />
+  );
   return (
-    <div className={`pitch-wrap ${variant}`}>
-      {variant === "flat" ? (
-        <Pitch meta={meta} frames={frames} slots={slots} replay={replay} pin={pin} />
-      ) : (
-        <div className="camera">
-          <Pitch meta={meta} frames={frames} slots={slots} replay={replay} pin={pin} />
-        </div>
-      )}
+    <div className={`pitch-wrap ${variant}${paused ? " paused" : ""}`}>
+      {variant === "flat" ? pitch : <div className="camera">{pitch}</div>}
       <div className="overlay-top-left">
         <ScoreBug meta={meta} snapshot={snapshot} clock={clock} status={status} lang={lang} />
       </div>
@@ -172,8 +185,19 @@ export function ViewerStage(props: StageProps) {
           {tr(lang, "replay")}
         </div>
       )}
-      <OverlayLayer onAir={onAir} meta={meta} mode={mode} lang={lang} />
-      {status === "finished" && !onAir["full-screen"] && <div className="overlay-banner">{tr(lang, "full_time")}</div>}
+      {paused && (
+        <div className="paused-badge" role="status">
+          {tr(lang, "paused")}
+          {snapshot && <b>{snapshot.clock}</b>}
+        </div>
+      )}
+      <OverlayLayer onAir={onAir} meta={meta} mode={mode} lang={lang} onDismiss={dismiss} next={props.next} />
+      {finished && !onAir["full-screen"] && (
+        <div className="overlay-banner">
+          {tr(lang, "full_time")}
+          {props.next && <AnalysisButton next={props.next} lang={lang} />}
+        </div>
+      )}
     </div>
   );
 }

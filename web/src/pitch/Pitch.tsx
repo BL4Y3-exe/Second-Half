@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import type { FrameBuffer } from "../useLiveMatch";
-import type { Frame, Meta, Telestrator as Drawing, XY } from "../types";
+import type { Lang, Meta, Telestrator as Drawing, XY } from "../types";
+import { PlayoutClock, sampleAt } from "./playback";
+import { HalfSpace, halfSpaceNow, LaneLines } from "./Lanes";
+import { PressLines, pressNow } from "./PressLines";
+import { TeamShapes } from "./TeamShapes";
 import { Telestrator, TelestratorDefs } from "./Telestrator";
 
 const L = 105;
@@ -25,6 +29,9 @@ interface Props {
   slots: { HOME: string[]; AWAY: string[] };
   replay?: Replay | null;
   pin?: Pin | null;
+  paused?: boolean; // hold the picture still
+  shapes?: boolean; // draw the analyst's team shapes and counter-presses
+  lang?: Lang;
 }
 
 interface Drawn {
@@ -32,69 +39,51 @@ interface Drawn {
   ball: XY;
   owner: string | null;
   replayAt: number | null; // match seconds being replayed, or null when live
+  t: number; // match seconds being drawn
 }
 
-const lerp = (a: XY, b: XY, f: number): XY => [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f];
 const REPLAY_SHARE = 0.75; // part of the overlay's time spent replaying; the rest holds the final picture
 
-/** Frames either side of match time `t` in the history, or null if the history does not cover it. */
-function around(history: Frame[], t: number): [Frame, Frame] | null {
-  if (history.length < 2 || t < history[0].t || t > history[history.length - 1].t) return null;
-  let lo = 0;
-  let hi = history.length - 1;
-  while (hi - lo > 1) {
-    const mid = (lo + hi) >> 1;
-    if (history[mid].t <= t) lo = mid;
-    else hi = mid;
-  }
-  return [history[lo], history[hi]];
-}
-
 /**
- * 2D pitch. Reads frames from a ref and interpolates between them every animation frame. While a
- * Telestrator item is on air it replays the move from recent frames and draws over it.
+ * 2D pitch. Reads frames from a ref and plays them back smoothly every animation frame. While a Telestrator item
+ * is on air it replays the move from recent frames and draws over it. Paused, it holds the picture.
  */
-export function Pitch({ meta, frames, slots, replay = null, pin = null }: Props) {
+export function Pitch({ meta, frames, slots, replay = null, pin = null, paused = false, shapes = false, lang = "en" }: Props) {
   const [drawn, setDrawn] = useState<Drawn | null>(null);
   const [hover, setHover] = useState<number | null>(null);
   const raf = useRef(0);
-  const replayRef = useRef<Replay | null>(replay);
-  replayRef.current = replay;
+  const clock = useRef(new PlayoutClock());
+  const live = useRef({ replay, paused, speed: meta.speed });
+  live.current = { replay, paused, speed: meta.speed };
 
   useEffect(() => {
     const loop = () => {
       const buf = frames.current;
       const now = performance.now();
-      const rp = replayRef.current;
-      let shown = false;
+      const { replay: rp, paused: hold, speed } = live.current;
+      raf.current = requestAnimationFrame(loop);
+      if (hold) {
+        clock.current.hold(now);
+        return;
+      }
       if (buf && rp) {
         const [w0, w1] = rp.drawing.window;
         const progress = Math.min(1, (now - rp.startedAt) / (rp.duration_s * 1000 * REPLAY_SHARE));
         const at = w0 + (w1 - w0) * progress;
-        const pair = around(buf.history, at);
-        if (pair) {
-          const [a, b] = pair;
-          const f = b.t > a.t ? (at - a.t) / (b.t - a.t) : 0;
-          const jump = a.period !== b.period;
-          setDrawn({
-            players: b.p.map((xy, i) => (jump ? xy : lerp(a.p[i], xy, f))),
-            ball: jump ? b.b : lerp(a.b, b.b, f),
-            owner: f < 0.5 ? a.o : b.o,
-            replayAt: at,
-          });
-          shown = true;
+        const shot = sampleAt(buf.history, at);
+        if (shot) {
+          setDrawn({ ...shot, replayAt: at, t: at });
+          return;
         }
       }
-      if (!shown && buf?.cur) {
-        const { prev, cur } = buf;
-        const f = prev ? Math.min(1, (now - buf.arrivedAt) / buf.interval) : 1;
-        // Do not glide across a jump (half time line-up): snap instead.
-        const jump = prev && prev.period !== cur.period;
-        const players = cur.p.map((xy, i) => (prev && !jump ? lerp(prev.p[i], xy, f) : xy));
-        const ball = prev && !jump ? lerp(prev.b, cur.b, f) : cur.b;
-        setDrawn({ players, ball, owner: cur.o, replayAt: null });
-      }
-      raf.current = requestAnimationFrame(loop);
+      if (!buf?.cur) return;
+      const t = clock.current.tick(buf.history, now, speed);
+      const shot = t === null ? null : sampleAt(buf.history, t);
+      setDrawn(
+        shot && t !== null
+          ? { ...shot, replayAt: null, t }
+          : { players: buf.cur.p, ball: buf.cur.b, owner: buf.cur.o, replayAt: null, t: buf.cur.t },
+      );
     };
     raf.current = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf.current);
@@ -108,6 +97,15 @@ export function Pitch({ meta, frames, slots, replay = null, pin = null }: Props)
   if (drawn) ids.forEach((id, i) => positions.set(id, drawn.players[i]));
   const replaying = drawn?.replayAt != null;
   const pinned = pin ? positions.get(pin.player) : undefined;
+  const press =
+    shapes && drawn && !replaying && frames.current
+      ? pressNow(frames.current.presses, drawn.t, meta.speed, drawn.players, ids, drawn.ball, drawn.owner)
+      : null;
+  const pressing = press !== null && (press.chase !== null || press.tag !== null);
+  const space =
+    shapes && drawn && !replaying && frames.current
+      ? halfSpaceNow(frames.current.spaces, drawn.t, meta.speed, frames.current.history)
+      : null;
 
   return (
     <svg
@@ -117,6 +115,19 @@ export function Pitch({ meta, frames, slots, replay = null, pin = null }: Props)
       aria-label="Live pitch"
     >
       <PitchBase />
+      {shapes && <LaneLines />}
+      {space && <HalfSpace key={space.id} ball={space} meta={meta} lang={lang} />}
+      {shapes && drawn && !replaying && (
+        <TeamShapes
+          meta={meta}
+          players={drawn.players}
+          ball={drawn.ball}
+          owner={drawn.owner}
+          ids={ids}
+          lang={lang}
+          support={!pressing && !space}
+        />
+      )}
 
       {drawn &&
         drawn.players.map(([x, y], i) => {
@@ -150,6 +161,17 @@ export function Pitch({ meta, frames, slots, replay = null, pin = null }: Props)
             </g>
           );
         })}
+      {press && drawn && pressing && (
+        <PressLines
+          now={press}
+          meta={meta}
+          lang={lang}
+          players={drawn.players}
+          ids={ids}
+          ball={drawn.ball}
+          owner={drawn.owner}
+        />
+      )}
       {drawn && (
         <g transform={`translate(${drawn.ball[0]} ${drawn.ball[1]})`}>
           <circle r={0.75} className="ball" />

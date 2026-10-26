@@ -26,6 +26,7 @@ interface Props {
   status: Status;
   you: ViewerSettings;
   guest: ViewerSettings | null;
+  paused: boolean;
 }
 
 /**
@@ -100,6 +101,7 @@ export function Analysis(props: Props) {
             status={props.status}
             settings={you}
             onAir={report}
+            paused={props.paused}
           />
         </section>
         <AgentDesks meta={meta} moment={selected} />

@@ -10,6 +10,6 @@
     "moments",
     "ratings"
   ],
-  "default_duration_s": 12,
-  "description": "Half-time and full-time summary with player ratings."
+  "default_duration_s": 16,
+  "description": "Half-time and full-time summary with player ratings, and at half time each team's shape with and without the ball."
 }

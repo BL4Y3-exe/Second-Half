@@ -1,4 +1,4 @@
-"""Fact-checker: every number and player name in a draft must match match state.
+"""Fact-checker: every number, formation and player name in a draft must match match state.
 
 Deterministic on purpose: it reads numbers out of the text and compares them
 with the Analyst's facts, at the precision the text uses. On a mismatch it
@@ -13,6 +13,8 @@ from .types import Facts, Verdict
 
 # A decimal comma counts too ("0,45 xG" in Spanish).
 NUMBER = re.compile(r"(?<![\w.,])(\d+(?:[.,]\d+)?)(?![\d])\s*(km/h|km|xG|m\b|%|'|difficulty)?")
+# A formation ("4-2-3-1") is checked whole against the facts' strings, not read as four numbers.
+FORMATION = re.compile(r"(?<![\w.,-])\d(?:-\d){2,4}(?![\w-])")
 # What kind of fact a number with this unit should match (by fact-name suffix or substring).
 UNIT_KEYS = {"km/h": ("_kmh",), "km": ("_km",), "xG": ("xg",), "m": ("_m",), "%": ("pct", "tilt", "completion", "poss"),
              "'": ("minute",), "difficulty": ("difficulty",)}
@@ -33,7 +35,11 @@ class FactChecker:
         checked: list[str] = []
         problems: list[str] = []
 
-        for m in NUMBER.finditer(text):
+        for m in FORMATION.finditer(text):
+            checked.append(m.group())
+            if m.group() not in names:
+                problems.append(f"says {m.group()}, which isn't a shape in the match data")
+        for m in NUMBER.finditer(FORMATION.sub(" ", text)):
             raw, unit = m.group(1), (m.group(2) or "").strip()
             value = float(raw.replace(",", "."))
             decimals = len(re.split("[.,]", raw)[1]) if re.search("[.,]", raw) else 0

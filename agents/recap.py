@@ -12,6 +12,8 @@ from . import templates
 from .models import ModelClient
 from .types import Facts, Moment
 
+SHAPE_MOVE_M = 4  # a back line that moves less than this without the ball is not worth a sentence
+
 SYSTEM = (Path(__file__).parent / "prompts" / "recap.md").read_text(encoding="utf-8")
 
 
@@ -27,6 +29,38 @@ def rating(p: dict, conceded: int) -> float:
         r -= 0.25 * conceded
     r -= 0.3 * p["yellow_cards"]
     return round(max(3.0, min(9.9, r)), 1)
+
+
+def add_shapes(f: dict, st) -> None:
+    """Each team's average shape in the first half, with the ball and without it, plus one sentence on the team
+    whose shape changed most when it lost the ball: a different formation first, then the back line moving most."""
+    shapes = {}
+    for side, key in (("HOME", "home"), ("AWAY", "away")):
+        on, off = st.shape.shape(1, side, True), st.shape.shape(1, side, False)
+        if on is None or off is None:
+            return
+        shapes[side] = {"on": on, "off": off}
+        f[f"{key}_shape_on"], f[f"{key}_shape_off"] = on["formation"], off["formation"]
+        f[f"{key}_line_on_m"], f[f"{key}_line_off_m"] = on["back_line_m"], off["back_line_m"]
+    f["shapes"] = shapes
+
+    def change(key: str) -> tuple[bool, int]:
+        return f[f"{key}_shape_on"] != f[f"{key}_shape_off"], abs(f[f"{key}_line_on_m"] - f[f"{key}_line_off_m"])
+
+    key = max(("home", "away"), key=change)
+    switched, moved = change(key)
+    if not switched and moved < SHAPE_MOVE_M:
+        return
+    team, on, off = f[key], f[f"{key}_shape_on"], f[f"{key}_shape_off"]
+    line_on, line_off = f[f"{key}_line_on_m"], f[f"{key}_line_off_m"]
+    deeper = line_off < line_on
+    en = f"went from {on} to {off}" if switched else f"kept their {on}"
+    es = f"pasó del {on} al {off}" if switched else f"mantuvo su {on}"
+    if moved >= SHAPE_MOVE_M:
+        en += f" and {'dropped' if deeper else 'pushed up'} their back line from {line_on} m to {line_off} m"
+        es += f" y {'retrasó' if deeper else 'adelantó'} su línea defensiva de {line_on} m a {line_off} m"
+    f["shape_line"] = f" Without the ball, {team} {en}."
+    f["shape_line_es"] = f" Sin balón, {team} {es}."
 
 
 class Recap:
@@ -69,6 +103,9 @@ class Recap:
         f["goals_line_es"] = f" Goles: {lines}." if lines else ""
         for r in ratings[:6]:
             f[f"rating_{r['id']}"] = r["rating"]
+        f["shape_line"] = f["shape_line_es"] = ""
+        if moment.label == "Half time":
+            add_shapes(f, st)
         return Facts(moment.id, f, [], ["get_score()", "get_team_stats(HOME)", "get_team_stats(AWAY)",
                                          "get_player_stats(*)"])
 

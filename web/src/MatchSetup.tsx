@@ -3,7 +3,13 @@ import { NOTES } from "./notes";
 import type { Club, Meta } from "./types";
 import { useDismiss } from "./useDismiss";
 
-const SPEEDS = [1, 5, 10, 20, 40];
+const MATCH_MINUTES = 96; // a match with stoppage time, so 8x takes about 12 minutes
+
+/** How long a whole match takes at the speed it plays at. */
+function lasts(speed: number): string {
+  const minutes = MATCH_MINUTES / speed;
+  return minutes >= 60 ? "about an hour and a half" : `about ${Math.round(minutes)} minutes`;
+}
 
 export interface MatchForm {
   home: string;
@@ -18,10 +24,10 @@ interface Props {
   form: MatchForm;
   setForm: (f: MatchForm) => void;
   onKickOff: () => void;
-  playing: Meta | null; // the match on screen, which the button names
+  playing: Meta | null; // the match on screen: the button says when its demo switch is on
 }
 
-/** Which match to play: clubs, match number, speed and the demo switch, tucked behind one button. */
+/** Which match to play next: the clubs and the demo switch, tucked behind one button. Each kick-off is a new match. */
 export function MatchSetup({ clubs, form, setForm, onKickOff, playing }: Props) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
@@ -36,7 +42,7 @@ export function MatchSetup({ clubs, form, setForm, onKickOff, playing }: Props) 
         onClick={() => setOpen(!open)}
         data-note={NOTES.setup}
       >
-        Match {playing?.seed ?? form.seed} · {playing?.speed ?? form.speed}x
+        New match
         {playing?.planted_slips && <span className="armed">slip armed</span>}
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M6 9l6 6 6-6" />
@@ -76,34 +82,9 @@ export function MatchSetup({ clubs, form, setForm, onKickOff, playing }: Props) 
               </select>
             </label>
           </div>
-          <div className="clubs">
-            <label data-note={NOTES.seed}>
-              Match no.
-              <input
-                type="number"
-                name="seed"
-                min={0}
-                inputMode="numeric"
-                autoComplete="off"
-                value={form.seed}
-                onChange={(e) => setForm({ ...form, seed: Number(e.target.value) || 0 })}
-              />
-            </label>
-            <label data-note={NOTES.speed}>
-              Speed
-              <select
-                name="speed"
-                value={form.speed}
-                onChange={(e) => setForm({ ...form, speed: Number(e.target.value) })}
-              >
-                {SPEEDS.map((s) => (
-                  <option key={s} value={s}>
-                    {s}x
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
+          <span className="speed-note" data-note={NOTES.speed}>
+            A whole match takes {lasts(playing?.speed ?? form.speed)}.
+          </span>
           <label className="switch" data-note={NOTES.plant}>
             <input
               type="checkbox"

@@ -46,12 +46,14 @@ interface Props {
   live: boolean; // the graphic is on screen now, rather than the last one that was
   steps: TraceStep[];
   lang: Lang;
-  onTrace: () => void;
 }
 
-/** The relay of agents behind the graphic on screen, one hop per handoff. */
-export function BehindStrip({ overlay, live, steps, lang, onTrace }: Props) {
-  const title = live ? "Behind this graphic" : overlay ? "The last graphic" : "Agents";
+/**
+ * The multi-agent team at work: the relay of agents behind the graphic on screen, one hop per handoff. It is named
+ * for what it is, so anyone watching knows the graphics come from a team of agents.
+ */
+export function BehindStrip({ overlay, live, steps, lang }: Props) {
+  const agents = new Set(steps.map((s) => s.agent).filter((a) => a !== "test")).size; // the demo switch is no agent
   // On a narrow screen the relay scrolls; keep the catch (or else the latest hop) in view.
   const relay = useRef<HTMLOListElement>(null);
   useEffect(() => {
@@ -62,14 +64,17 @@ export function BehindStrip({ overlay, live, steps, lang, onTrace }: Props) {
     }
   }, [overlay, steps.length]);
   return (
-    <section className="behind" aria-label="How the agents made this graphic">
+    <section className="behind" aria-label="The multi-agent team behind this graphic">
       <div className="behind-title">
-        <span data-note={NOTES.behind}>{title}</span>
-        {overlay && (
-          <b>
-            {overlay.clock} · {tr(lang, overlay.kind)}
-          </b>
-        )}
+        <span data-note={NOTES.behind}>
+          <i className={live ? "on" : undefined} aria-hidden="true" />
+          Multi-agent team
+        </span>
+        <b>
+          {overlay
+            ? `${agents} agents · ${overlay.clock} ${tr(lang, overlay.kind)}`
+            : "7 agents on duty"}
+        </b>
       </div>
       {overlay ? (
         <ol className="relay" ref={relay}>
@@ -91,12 +96,6 @@ export function BehindStrip({ overlay, live, steps, lang, onTrace }: Props) {
       ) : (
         <p className="relay-empty">The Spotter is watching the match. The next graphic's story shows up here.</p>
       )}
-      <button type="button" className="behind-more" onClick={onTrace}>
-        Analysis
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M5 12h14M13 6l6 6-6 6" />
-        </svg>
-      </button>
     </section>
   );
 }

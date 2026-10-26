@@ -8,6 +8,7 @@ from collections import deque
 WINDOW_S = 300.0
 SIDES = ("HOME", "AWAY")
 DEFENSIVE_ACTIONS = {"tackle", "interception", "foul"}
+PPDA_MIN_ACTIONS = 5  # before this many, one tackle more or less swings PPDA wildly
 
 
 def other(side: str) -> str:
@@ -91,6 +92,7 @@ class Momentum:
         return {"HOME": round(100 * home / n, 1), "AWAY": round(100 * (n - home) / n, 1)}
 
     def ppda(self) -> dict[str, float | None]:
-        """Passes allowed per defensive action (lower = more intense pressing)."""
-        return {s: round(self.ppda_passes[s] / self.ppda_actions[s], 1) if self.ppda_actions[s] else None
-                for s in SIDES}
+        """Passes allowed per defensive action (lower = more intense pressing): the opponent's passes in its own 60%
+        of the pitch for each tackle, interception or foul a team makes there. None until it has made a few."""
+        return {s: round(self.ppda_passes[s] / self.ppda_actions[s], 1)
+                if self.ppda_actions[s] >= PPDA_MIN_ACTIONS else None for s in SIDES}

@@ -16,7 +16,7 @@ MAX_NUMBERS = {"casual": 1}
 DEFAULT_MAX = 3
 # Words a casual viewer won't know, in English and Spanish.
 JARGON = re.compile(r"\b(xG|expected goals|goles esperados|field tilt|tilt|inclinación|lanes?|carril(?:es)?|"
-                    r"difficulty|dificultad)\b", re.IGNORECASE)
+                    r"half-spaces?|difficulty|dificultad)\b", re.IGNORECASE)
 
 
 def count_numbers(text: str) -> int:

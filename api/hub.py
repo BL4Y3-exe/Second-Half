@@ -51,6 +51,7 @@ class LiveMatch:
     task: asyncio.Task | None = None
     agents_task: asyncio.Task | None = None
     last_frame: dict | None = None
+    presses_sent: int = 0  # counter-press windows and records already published
     finished: bool = False
     started_at: float = field(default_factory=time.time)
 
@@ -132,6 +133,10 @@ class MatchHub:
                 enriched, trs = live.state.apply_event(ev)
                 live.publish("event", enriched)
                 triggers += trs
+            presses = live.state.counter_press.feed
+            for rec in presses[live.presses_sent:]:
+                live.publish("press", rec)
+            live.presses_sent = len(presses)
             for tr in triggers:
                 live.publish("trigger", tr)
             if orch is not None:

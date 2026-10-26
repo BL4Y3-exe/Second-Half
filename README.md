@@ -11,8 +11,8 @@ Foundry, Microsoft Agent Framework, the Model Context Protocol and Azure
 Container Apps. All clubs, players and matches are fictional.
 
 **[Live demo](https://second-half.niceground-c6cb8283.germanywestcentral.azurecontainerapps.io)**
-· [with a guest and the demo switch on](https://second-half.niceground-c6cb8283.germanywestcentral.azurecontainerapps.io/?guest=1&plant=1&seed=17)
-· [Analysis view](https://second-half.niceground-c6cb8283.germanywestcentral.azurecontainerapps.io/?view=analysis&plant=1&seed=17)
+· [with a guest and the demo switch on](https://second-half.niceground-c6cb8283.germanywestcentral.azurecontainerapps.io/?guest=1&plant=1&seed=7)
+· [Analysis view](https://second-half.niceground-c6cb8283.germanywestcentral.azurecontainerapps.io/?view=analysis&plant=1&seed=7)
 · MCP endpoint: the live demo address plus `/mcp`
 
 ![The living room: a goal on a tilted broadcast pitch with the Telestrator
@@ -40,28 +40,58 @@ cd ..
 python -m api
 ```
 
-The page starts Harbourside Athletic v Kingsmere Rovers (seed 9: a
-second-half comeback with a stoppage-time winner) at 10x speed. To pick
-other clubs, a seed and a speed, open the **Match** button at the top and
-press **Kick off**.
+The page starts Harbourside Athletic v Kingsmere Rovers (seed 7: an early
+goal and five in all, with Kingsmere chasing an equaliser to the end). Matches
+play at 8x speed, so a whole match takes about 12 minutes and the clock ticks
+over a match minute every 7 seconds. To pick other clubs, open **New match** at the top and press **Kick
+off**. Each kick-off plays a new match, and the address bar keeps its seed and
+speed, so the link replays it.
 
 The page has two views, switched at the top.
 
 **Watch** is the living room: the match as a TV broadcast, seen through a
 tilted main camera. While the match plays, the agent team puts graphics on
-screen: goal, chance and pass cards, momentum swings, top-speed tags and
-half-time and full-time recaps. Moments with a Telestrator drawing replay the
-move on the pitch with the arrows drawn in as the ball travels. Click **You**
+screen: goal, chance, pass and counter-press cards, momentum swings, top-speed tags and
+half-time and full-time recaps (close one with its **×**, a click beside it or
+Esc). Outside Casual mode, the half-time recap also shows each team's average
+shape in the first half on two small pitches, with the formation and how high
+the back line sat. A switch above them flips between the shape with the ball
+and without it, and the players glide to their other places. The full-time
+recap has a **See the match analysis** button, and after 15 seconds the page
+moves on to Analysis by itself. Moments with a Telestrator drawing replay the
+move on the pitch with the arrows drawn in as the ball travels. **Pause** (or Space) stops your picture on
+the moment, with the exact match time; the match keeps playing for everyone
+else, and **Live** jumps back to it. Click **You**
 at the top right to switch the viewer mode (Analyst, Casual fan, Player
 focus), the language (English, Español) and pick a favourite club; the line
-under those buttons says what the option you are on does. A casual fan's
+under those buttons says what the option you are on does. In Analyst mode the
+pitch draws each side's shape the way a club analyst would: for the side on
+the ball, the triangle, diamond or box the carrier and the nearest teammates
+make, with the passing lanes in it (dashed where an opponent cuts one) and the
+numbers around the ball; for the side without it, its back line and the line
+in front, and how many metres apart they are (compact up to 12 m, stretched
+from 18 m). It also draws every counter-press, Rangnick's 8-second rule: when a
+team loses the ball in the opponent's half, a line runs from each of its
+players within 10 m to the ball while the 8 seconds run, then a small tag on
+the player who won it back says how fast ("Won back in 3.2 s"), or "Played
+through" when the opponent escaped a press of three or more players. Faint
+lines along the sides of the penalty area and the six-yard box split the pitch
+into the five lanes of positional play (wing, half-space, centre, half-space,
+wing); when a team gets the ball into a half-space in the final third, that
+strip lights up in its colour until the other team touches the ball. The shape
+round the ball steps aside while either is up. A casual fan's
 graphics leave out the stat chips and the xG label too, so their screen
 carries one number at most. Press **+** to add a second viewer: the guest's
 screen opens in the corner with their own mode, language and club (by
 default a Spanish-speaking casual Kingsmere fan). The strip along the bottom,
-**Behind this graphic**, shows the relay of agents that made the graphic on
+**Multi-agent team**, shows the relay of agents that made the graphic on
 screen, with any wrong number the Fact-checker caught struck through next to
 the right one. Watch is laid out for a 1920x1080 screen recording.
+
+![Analyst mode, paused at 02:00: Harbourside's ball carrier and three
+teammates make a diamond with three open passing lanes, two against one
+around the ball. Kingsmere's back four and the midfield pair in front are
+10 m apart, a compact block.](docs/images/team-shapes.png)
 
 **Analysis** is the gallery behind the broadcast, with all the data. How the
 match has swung: momentum every minute, with every moment the Spotter flagged
@@ -74,9 +104,9 @@ totals, the team numbers and the match feed. Hover over (or tab to) any
 control, stat, agent name or total with a dotted underline for a
 one-sentence note on what it is.
 
-![The Analysis view: the momentum wave with goals on the rail, the programme
-monitor, and the agent desks for the first goal, where the Fact-checker sends
-back a draft with a planted wrong distance and xG.](docs/images/analysis.png)
+![The Analysis view: the momentum wave with the opening goal on the rail, the
+programme monitor, and the agent desks for that goal, where the Fact-checker
+sends back a draft with a planted wrong distance and xG.](docs/images/analysis.png)
 
 No Azure account or API key is needed: unless you set up Microsoft Foundry
 (below), the agents run on a built-in mock model that writes from templates
@@ -90,7 +120,7 @@ Both views mark each one as planted, so the catch on screen is never
 passed off as the model's own mistake.
 
 You can link straight to a set-up, which is handy for demos:
-`http://127.0.0.1:8000/?seed=12&speed=20&mode=casual&lang=es&fav=HOME&view=analysis`,
+`http://127.0.0.1:8000/?home=ashford&away=northgate&seed=12&mode=casual&lang=es&fav=HOME&view=analysis`,
 or `http://127.0.0.1:8000/?guest=1&plant=1` for the living room with a guest
 and the demo switch on.
 
@@ -144,24 +174,24 @@ No extra packages needed for these.
 
 ```bash
 # full match in a few seconds: score and team stats
-python -m simulator summary --seed 9
+python -m simulator summary --seed 7
 
 # watch the events scroll by, 20x faster than real time
-python -m simulator live --seed 9 --speed 20 --pretty
+python -m simulator live --seed 7 --speed 20 --pretty
 
 # raw JSON lines, the format the rest of the system consumes
-python -m simulator live --seed 9 --speed 50
+python -m simulator live --seed 7 --speed 50
 
 # save a whole match (events + player positions) to JSON
-python -m simulator export --seed 9
+python -m simulator export --seed 7
 
 # run the stats engine over a match: xG, field tilt, PPDA, key-moment triggers
-python -m stats --seed 9
+python -m stats --seed 7
 
 # run a match through the agent team and print what it put on screen
-python -m agents --seed 9
-python -m agents --seed 9 --trace              # every handoff, rejected drafts marked x
-python -m agents --seed 9 --mode casual --lang es
+python -m agents --seed 7
+python -m agents --seed 7 --trace              # every handoff, rejected drafts marked x
+python -m agents --seed 7 --mode casual --lang es
 python -m agents --model foundry --until 30    # on Microsoft Foundry (see above), first 30 minutes
 python -m agents --model foundry --plant --trace  # with the demo switch: planted slips, caught
 ```
@@ -213,10 +243,33 @@ Plain code, no AI: every number an agent says later is checked against it.
 - **Speeds and running** from positions: top speed, distance, sprints.
 - **Control vs Chaos** index (0 to 100) from pass completion, possession
   length, turnovers and duels over the last 5 minutes.
-- **Momentum** (-100 to 100), field tilt, PPDA and high turnovers.
+- **Momentum** (-100 to 100), field tilt, PPDA and high turnovers. PPDA
+  (passes per defensive action) is how many passes a team lets the opponent
+  make in the opponent's own 60% of the pitch for each tackle, interception or
+  foul it makes there, shown once it has made five: lower means harder
+  pressing. The Analysis tab shows it as "Pressing (PPDA)", with "High press"
+  at 10 or under and "Sits deep" over 15.
+- **Counter-pressing**: each ball lost in the opponent's half opens an
+  8-second window, won if the team gets the ball back in open play in time
+  (a ball that bounces back inside a second doesn't count) and played through
+  if the opponent escapes three or more pressers. Each team's counter-presses
+  and wins are in its stats.
+- **Five lanes**: every completed pass or carry that ends in the final third
+  gets its lane (left wing, left half-space, centre, right half-space, right
+  wing, from the attacking team's side), and each team's entries into the
+  final third are counted by lane ("Attacks by lane" in the Analysis tab).
+  Goal and chance cards say when the move came through a half-space.
+- **Shape with and without the ball**: each player's average position in
+  each half, by lineup slot, split by whether his team had the ball. The
+  formation is read off the outfield players' average depths: from the back,
+  a new line starts wherever the next player is more than 6 m further up (so
+  a 4-3-3 with a holding midfielder reads 4-1-2-3). The half-time recap shows
+  it, and its text says which team's shape changed most without the ball.
 - **Triggers** with a priority for the Spotter agent: goal, big chance,
-  momentum swing, shot over 100 km/h, killer pass, fastest sprint of the
-  match, 10 km covered.
+  momentum swing, shot over 100 km/h, killer pass, counter-press (a ball won
+  back within 8 seconds and a shot within 10 more; when the move ends in a big
+  chance or a goal, that card carries the counter-press instead), fastest
+  sprint of the match, 10 km covered.
 
 ### Agent team (`agents/`)
 
@@ -224,13 +277,13 @@ Seven agents work each key moment in turn:
 
 | Agent | Job |
 | --- | --- |
-| Spotter | Watches the stats engine's triggers, merges ones that belong together (a shot and its goal) and holds back minor moments so the screen isn't cluttered. |
+| Spotter | Watches the stats engine's triggers, merges ones that belong together (a shot and its goal, a counter-press and the big chance it leads to) and holds back minor moments so the screen isn't cluttered. |
 | Analyst | Looks up the facts with the match tools: the passage of play, xG, speeds, the player's and team's numbers. |
 | Storyteller | Writes one or two sentences on why the moment matters, using only those facts. |
 | Fact-checker | Plain code, no AI. Every number and player name in the draft must match match state. If not, it sends the draft back with the reason; after two failures (or if the model doesn't answer) a plain stat card goes out instead. |
 | Director | Sends a story with more than 3 numbers back once, picks the graphics plugin and slot, builds the Telestrator drawing from real event positions, and schedules items so graphics never pile up. |
 | Persona | Rewrites the approved story for each viewer mode and language, all at once. Each version is fact-checked again; one that is too busy, or uses jargon like xG for a casual fan, gets one redraft; one that still fails falls back to a scripted line built from the facts. |
-| Recap | Writes the half-time and full-time summaries with player ratings. |
+| Recap | Writes the half-time and full-time summaries with player ratings, and at half time how a team's shape changed without the ball. |
 
 Every moment goes down this path, and each check that sends work back has a
 fallback if the redraft fails too:
@@ -279,10 +332,11 @@ write one.
 
 ### Live feed (`api/`)
 
-`GET /api/live?home=harbourside&away=kingsmere&seed=9&speed=10` streams
+`GET /api/live?home=harbourside&away=kingsmere&seed=7&speed=8` streams
 Server-Sent Events: `meta` (team sheets), `frame` (positions, about 12 a
-second), `event` (with computed stats attached), `trigger`, `stats` (a
-snapshot every second), `overlay` (a graphic the Director scheduled),
+second), `event` (with computed stats attached), `trigger`, `press` (a
+counter-press as it starts, then won or played through), `stats` (a snapshot every second),
+`overlay` (a graphic the Director scheduled),
 `trace` (one agent handoff) and `end`. A viewer who joins late also gets
 `history` (the momentum every minute so far). Viewers of the same match share
 one running match and one agent team.
@@ -310,7 +364,7 @@ replay over stdio without the web app (it plays the match to the minute
 given, then answers about it):
 
 ```bash
-python -m mcp_server --seed 9 --minute 60
+python -m mcp_server --seed 7 --minute 60
 ```
 
 When the server runs under a public host name (for example on Azure
@@ -338,7 +392,7 @@ Microsoft Foundry:
 - `Dockerfile` builds one image with the web app, the API and the MCP
   endpoint.
 - When the tests pass on `main`, GitHub Actions publishes that image to
-  `ghcr.io/<owner>/<repo>:latest`.
+  `ghcr.io/<owner>/<repo>`, tagged `latest` and `sha-<commit>`.
 - `infra/main.bicep` creates a Container Apps environment (with a Log
   Analytics workspace for logs) and the app, gives the app a managed
   identity, and grants that identity the Foundry User role on your Foundry
@@ -362,7 +416,9 @@ The first time:
    It prints the app's address; the MCP endpoint is that address plus
    `/mcp`.
 
-After later pushes, run the same command again to roll out the new image.
+After later pushes, wait for the **image** job, then run the same command
+again. It deploys the image built for the commit you are on, so make sure
+that commit is pushed.
 The app runs as a single replica, because live matches are kept in memory
 and shared by every viewer, and stays warm so visitors never wait
 (`-MinReplicas 0` lets it sleep when nobody is using it). `/api/health`

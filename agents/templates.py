@@ -25,14 +25,20 @@ def has(*keys: str) -> Callable[[Facts], bool]:
 
 STORY: dict[str, list[Rule]] = {
     "goal": [
-        (has("assist", "passes"), "{assist} picks out {player}, who finishes from {distance_m} m. A {passes}-pass move "
-                                  "worth {xg:.2f} xG, and it's {home_short} {score_home}-{score_away} {away_short}."),
+        (has("half_space"), "The move came through the {half_space} half-space, and {player} finishes from "
+                            "{distance_m} m, a {xg:.2f} xG chance. {home_short} {score_home}-{score_away} "
+                            "{away_short}."),
+        (has("assist", "passes"), "{assist} picks out {player}, who finishes from {distance_m} m. That move took "
+                                  "{passes} passes and was worth {xg:.2f} xG. {home_short} {score_home}-{score_away} "
+                                  "{away_short}."),
         (has("assist"), "{player} converts {assist}'s pass from {distance_m} m, a {xg:.2f} xG chance struck at "
                         "{shot_speed_kmh} km/h. {home_short} {score_home}-{score_away} {away_short}."),
         (ALWAYS, "{player} scores from {distance_m} m at {shot_speed_kmh} km/h. The chance was worth {xg:.2f} xG; "
                  "{home_short} {score_home}-{score_away} {away_short}."),
     ],
     "big_chance": [
+        (has("half_space"), "In through the {half_space} half-space: {player} gets a {xg:.2f} xG chance from "
+                            "{distance_m} m, but it's {outcome_text}."),
         (has("passes"), "{player} should score: a {xg:.2f} xG chance from {distance_m} m at the end of a move of "
                         "{passes} passes, but it's {outcome_text}."),
         (ALWAYS, "Huge chance for {player}, {distance_m} m out and worth {xg:.2f} xG, but it's {outcome_text}."),
@@ -49,6 +55,15 @@ STORY: dict[str, list[Rule]] = {
          "{passer} slips a {difficulty_label} pass past the defender to {receiver}, gaining {progress_m} m."),
         (ALWAYS, "Defence split: {passer} finds {receiver} with a {distance_m} m pass rated {difficulty:.2f} "
                  "for difficulty."),
+    ],
+    "counter_press": [
+        (lambda f: f.get("counter_press_wins", 0) > 1 and "shot_after_s" in f,
+         "{team} win the ball back {won_back_s} s after losing it, and {player} shoots {shot_after_s} s later, "
+         "{outcome_text}. They have won it back within {press_window_s} s {counter_press_wins} times today."),
+        (has("shot_after_s"), "Counter-press: {team} win it back in {won_back_s} s, and {player} shoots "
+                              "{shot_after_s} s later, {outcome_text}."),
+        (ALWAYS, "{team} hunt the ball down and win it back in {won_back_s} s; {player} gets a shot away, "
+                 "{outcome_text}."),
     ],
     "momentum_swing": [
         (has("final_third_recent"), "{team} are on top: {final_third_recent} passes into the final third in the "
@@ -70,6 +85,7 @@ FALLBACK: dict[str, str] = {
     "big_chance": "{player}: {xg:.2f} xG chance from {distance_m} m.",
     "shot_speed": "{player}: shot at {shot_speed_kmh} km/h.",
     "killer_pass": "{passer} to {receiver}: pass difficulty {difficulty:.2f}.",
+    "counter_press": "{team}: ball won back in {won_back_s} s, shot from {player}.",
     "momentum_swing": "{team}: {tilt_recent}% field tilt, last 5 minutes.",
     "sprint_speed": "{player}: {top_speed_kmh} km/h.",
     "distance_10k": "{player}: {distance_km} km covered.",
@@ -80,6 +96,7 @@ FALLBACK_ES: dict[str, str] = {
     "big_chance": "{player}: ocasión de {xg:.2f} xG desde {distance_m} m.",
     "shot_speed": "{player}: disparo a {shot_speed_kmh} km/h.",
     "killer_pass": "{passer} a {receiver}: dificultad del pase {difficulty:.2f}.",
+    "counter_press": "{team}: balón recuperado en {won_back_s} s, disparo de {player}.",
     "momentum_swing": "{team}: {tilt_recent}% de dominio territorial, últimos 5 minutos.",
     "sprint_speed": "{player}: {top_speed_kmh} km/h.",
     "distance_10k": "{player}: {distance_km} km recorridos.",
@@ -99,6 +116,7 @@ PERSONA: dict[str, dict[str, dict[str, list[Rule]]]] = {
             "big_chance": [(ALWAYS, "So close! {player} had a great chance there, but it's {outcome_text}.")],
             "shot_speed": [(ALWAYS, "What a hit from {player}! {shot_speed_kmh} km/h!")],
             "killer_pass": [(ALWAYS, "Lovely pass from {passer} to set {receiver} free.")],
+            "counter_press": [(ALWAYS, "{team} snap straight back at them, win the ball and {player} has a go!")],
             "momentum_swing": [(ALWAYS, "{team} are pushing hard now.")],
             "sprint_speed": [(ALWAYS, "Look at {player} go! {top_speed_kmh} km/h, nobody has been faster today.")],
             "distance_10k": [(ALWAYS, "{player} has run over {milestone_km} km already!")],
@@ -110,6 +128,7 @@ PERSONA: dict[str, dict[str, dict[str, list[Rule]]]] = {
                                     "{player_goals} {goals_word}.")],
             "shot_speed": [(ALWAYS, "{player} today: {player_shots} {shots_word}, hardest at {shot_speed_kmh} km/h.")],
             "killer_pass": [(ALWAYS, "{passer} today: {passer_passes} passes, {passer_completion}% completed.")],
+            "counter_press": [(ALWAYS, "{player} today: {player_shots} {shots_word}, {player_xg:.2f} xG.")],
             "momentum_swing": [(ALWAYS, "{team}: {team_shots} shots, {team_xg:.2f} xG so far.")],
             "sprint_speed": [(ALWAYS, "{player} today: {distance_km} km run, top speed {top_speed_kmh} km/h.")],
             "distance_10k": [(ALWAYS, "{player} today: {distance_km} km run, top speed {top_speed_kmh} km/h.")],
@@ -123,17 +142,23 @@ PERSONA: dict[str, dict[str, dict[str, list[Rule]]]] = {
             "big_chance": [(ALWAYS, "¡Qué ocasión! {player} la tuvo, pero {outcome_text_es}.")],
             "shot_speed": [(ALWAYS, "¡Vaya disparo de {player}! {shot_speed_kmh} km/h.")],
             "killer_pass": [(ALWAYS, "Gran pase de {passer} para dejar solo a {receiver}.")],
+            "counter_press": [(ALWAYS, "¡{team} aprieta nada más perderla, la recupera y {player} dispara!")],
             "momentum_swing": [(ALWAYS, "{team} aprieta ahora.")],
             "sprint_speed": [(ALWAYS, "¡Cómo corre {player}! {top_speed_kmh} km/h, nadie ha ido más rápido hoy.")],
             "distance_10k": [(ALWAYS, "¡{player} ya ha corrido más de {milestone_km} km!")],
         },
         "analyst": {
-            "goal": [(has("assist"), "{assist} asiste y {player} marca desde {distance_m} m: una ocasión de "
+            "goal": [(has("half_space"), "La jugada entra por el carril interior {half_space_es} y {player} marca "
+                                         "desde {distance_m} m, una ocasión de {xg:.2f} xG. "
+                                         "{home_short} {score_home}-{score_away} {away_short}."),
+                     (has("assist"), "{assist} asiste y {player} marca desde {distance_m} m: una ocasión de "
                                      "{xg:.2f} xG a {shot_speed_kmh} km/h. "
                                      "{home_short} {score_home}-{score_away} {away_short}."),
                      (ALWAYS, "{player} marca desde {distance_m} m a {shot_speed_kmh} km/h, una ocasión de {xg:.2f} "
                               "xG. {home_short} {score_home}-{score_away} {away_short}.")],
-            "big_chance": [(ALWAYS, "Ocasión clarísima de {player}: {xg:.2f} xG desde {distance_m} m, "
+            "big_chance": [(has("half_space"), "Por el carril interior {half_space_es}: ocasión de {xg:.2f} xG para "
+                                               "{player} desde {distance_m} m, pero {outcome_text_es}."),
+                           (ALWAYS, "Ocasión clarísima de {player}: {xg:.2f} xG desde {distance_m} m, "
                                     "pero {outcome_text_es}.")],
             "shot_speed": [(ALWAYS, "{player} dispara a {shot_speed_kmh} km/h desde {distance_m} m.")],
             "killer_pass": [(lambda f: f.get("progress_m", 0) > 0,
@@ -141,6 +166,11 @@ PERSONA: dict[str, dict[str, dict[str, list[Rule]]]] = {
                              "que gana {progress_m} m."),
                             (ALWAYS, "{passer} encuentra a {receiver} con un pase de {distance_m} m y dificultad "
                                      "{difficulty:.2f}.")],
+            "counter_press": [(has("shot_after_s"),
+                               "Contrapresión: {team} recupera el balón en {won_back_s} s y {player} dispara "
+                               "{shot_after_s} s después; {outcome_text_es}."),
+                              (ALWAYS, "{team} recupera el balón en {won_back_s} s y {player} dispara; "
+                                       "{outcome_text_es}.")],
             "momentum_swing": [(ALWAYS, "{team} domina: {tilt_recent}% de los pases al último tercio en los últimos "
                                         "5 minutos.")],
             "sprint_speed": [(ALWAYS, "{player} alcanza {top_speed_kmh} km/h, el sprint más rápido del partido.")],
@@ -153,6 +183,7 @@ PERSONA: dict[str, dict[str, dict[str, list[Rule]]]] = {
             "shot_speed": [(ALWAYS, "{player} hoy: {player_shots} {shots_word_es}, el más fuerte a "
                                     "{shot_speed_kmh} km/h.")],
             "killer_pass": [(ALWAYS, "{passer} hoy: {passer_passes} pases, {passer_completion}% completados.")],
+            "counter_press": [(ALWAYS, "{player} hoy: {player_shots} {shots_word_es}, {player_xg:.2f} xG.")],
             "momentum_swing": [(ALWAYS, "{team}: {team_shots} tiros y {team_xg:.2f} xG hasta ahora.")],
             "sprint_speed": [(ALWAYS, "{player} hoy: {distance_km} km recorridos, punta de {top_speed_kmh} km/h.")],
             "distance_10k": [(ALWAYS, "{player} hoy: {distance_km} km recorridos, punta de {top_speed_kmh} km/h.")],
@@ -162,10 +193,10 @@ PERSONA: dict[str, dict[str, dict[str, list[Rule]]]] = {
 
 RECAP: dict[str, str] = {
     "en": ("{label}: {home} {score_home}-{score_away} {away}. xG {home_xg:.2f} to {away_xg:.2f}, shots "
-           "{home_shots} to {away_shots}, possession {home_poss}% to {away_poss}%.{goals_line} "
+           "{home_shots} to {away_shots}, possession {home_poss}% to {away_poss}%.{goals_line}{shape_line} "
            "Top rated: {best_player} ({best_rating:.1f})."),
     "es": ("{label_es}: {home} {score_home}-{score_away} {away}. xG {home_xg:.2f} a {away_xg:.2f}, tiros "
-           "{home_shots} a {away_shots}, posesión {home_poss}% a {away_poss}%.{goals_line_es} "
+           "{home_shots} a {away_shots}, posesión {home_poss}% a {away_poss}%.{goals_line_es}{shape_line_es} "
            "Mejor valorado: {best_player} ({best_rating:.1f})."),
 }
 

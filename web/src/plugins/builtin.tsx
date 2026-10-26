@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { tr } from "../i18n";
-import type { Lang, Meta, Mode, Overlay, Side } from "../types";
+import { ShapePitch } from "../pitch/ShapePitch";
+import type { Lang, Meta, Mode, Overlay, Side, XY } from "../types";
 
 /** What every graphics plugin is handed: the Director's item and the viewer's text for it. */
 export interface PluginProps {
@@ -8,10 +10,52 @@ export interface PluginProps {
   meta: Meta;
   lang: Lang;
   mode: Mode;
+  next?: Next; // after the full-time card: the way to the match analysis
+}
+
+/** The way from the full-time card to the match analysis, and the seconds until the page goes there itself. */
+export interface Next {
+  go: () => void;
+  seconds: number | null;
+}
+
+/** The button to the match analysis, with the countdown to going there anyway. */
+export function AnalysisButton({ next, lang }: { next: Next; lang: Lang }) {
+  return (
+    <div className="to-analysis">
+      <button type="button" onClick={next.go}>
+        {tr(lang, "see_analysis")}
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M5 12h14M13 6l6 6-6 6" />
+        </svg>
+      </button>
+      {next.seconds !== null && (
+        <span role="timer">
+          {tr(lang, "opening_in")} {next.seconds} s
+        </span>
+      )}
+    </div>
+  );
 }
 
 const num = (v: unknown, digits = 0) => (typeof v === "number" ? v.toFixed(digits) : "–");
 const str = (v: unknown) => (typeof v === "string" ? v : "");
+const seconds = (v: unknown, lang: Lang) => num(v, 1).replace(".", lang === "es" ? "," : ".");
+
+/**
+ * The chips for a shot, how fast the ball was won back when a counter-press started the move, and the half-space
+ * the move came through.
+ */
+function shotChips(d: Overlay["data"], lang: Lang): [string, string][] {
+  const chips: [string, string][] = [
+    [tr(lang, "xg"), num(d.xg, 2)],
+    [tr(lang, "distance"), `${num(d.distance_m)} m`],
+    [tr(lang, "shot_speed_label"), `${num(d.shot_speed_kmh)} km/h`],
+  ];
+  if (typeof d.won_back_s === "number") chips.push([tr(lang, "to_win_it_back"), `${seconds(d.won_back_s, lang)} s`]);
+  if (d.half_space === "left" || d.half_space === "right") chips.push(["", tr(lang, `${d.half_space}_half_space`)]);
+  return chips;
+}
 
 /** The stat chips under a card's headline. A casual viewer gets none: their line already says what matters. */
 function Chips({ items, mode }: { items: [string, string][]; mode: Mode }) {
@@ -38,14 +82,7 @@ export function GoalCard({ overlay, meta, lang, mode }: PluginProps) {
           {home.short} {num(d.score_home)}-{num(d.score_away)} {away.short}
         </span>
       </div>
-      <Chips
-        items={[
-          [tr(lang, "xg"), num(d.xg, 2)],
-          [tr(lang, "distance"), `${num(d.distance_m)} m`],
-          [tr(lang, "shot_speed_label"), `${num(d.shot_speed_kmh)} km/h`],
-        ]}
-        mode={mode}
-      />
+      <Chips items={shotChips(d, lang)} mode={mode} />
     </>
   );
 }
@@ -59,14 +96,7 @@ export function ShotCard({ overlay, lang, mode }: PluginProps) {
         <span className="lt-name">{str(d.player)}</span>
         {outcome && <span className="lt-outcome">{outcome}</span>}
       </div>
-      <Chips
-        items={[
-          [tr(lang, "xg"), num(d.xg, 2)],
-          [tr(lang, "distance"), `${num(d.distance_m)} m`],
-          [tr(lang, "shot_speed_label"), `${num(d.shot_speed_kmh)} km/h`],
-        ]}
-        mode={mode}
-      />
+      <Chips items={shotChips(d, lang)} mode={mode} />
     </>
   );
 }
@@ -85,6 +115,28 @@ export function PassCard({ overlay, lang, mode }: PluginProps) {
         <span className="lt-name">{str(d.passer)}</span>
         <span className="lt-arrow">→</span>
         <span className="lt-name">{str(d.receiver)}</span>
+      </div>
+      <Chips items={chips} mode={mode} />
+    </>
+  );
+}
+
+export function PressCard({ overlay, meta, lang, mode }: PluginProps) {
+  const d = overlay.data;
+  const side = (overlay.team ?? "HOME") as Side;
+  const outcome = str(lang === "es" ? d.outcome_text_es : d.outcome_text) || str(d.outcome_text);
+  const chips: [string, string][] = [[tr(lang, "to_win_it_back"), `${seconds(d.won_back_s, lang)} s`]];
+  if (typeof d.shot_after_s === "number") chips.push([tr(lang, "to_the_shot"), `${num(d.shot_after_s)} s`]);
+  if (typeof d.counter_press_wins === "number") {
+    chips.push([tr(lang, "press_wins"), `${num(d.counter_press_wins)}/${num(d.counter_presses)}`]);
+  }
+  return (
+    <>
+      <div className="lt-main">
+        <span className="lt-name">{meta.teams[side].name}</span>
+        <span className="lt-arrow">→</span>
+        <span className="lt-name">{str(d.player)}</span>
+        {outcome && <span className="lt-outcome">{outcome}</span>}
       </div>
       <Chips items={chips} mode={mode} />
     </>
@@ -152,7 +204,67 @@ interface Goal {
   team: Side;
 }
 
-export function RecapCard({ overlay, text, meta, lang, mode }: PluginProps) {
+interface Shape {
+  positions: XY[];
+  formation: string;
+  back_line_m: number;
+}
+
+type Shapes = Record<Side, { on: Shape; off: Shape }>;
+
+/** Half time: each team's average shape, attacking left to right, with the ball or without it at a click. */
+function RecapShapes({ shapes, meta, lang }: { shapes: Shapes; meta: Meta; lang: Lang }) {
+  const [state, setState] = useState<"on" | "off">("on");
+  return (
+    <div className="recap-shapes">
+      <div className="recap-shapes-head">
+        <span className="label">{tr(lang, "shape_title")}</span>
+        <div className="seg" role="group" aria-label={tr(lang, "shape_title")}>
+          {(["on", "off"] as const).map((s) => (
+            <button
+              key={s}
+              type="button"
+              className={state === s ? "on" : ""}
+              aria-pressed={state === s}
+              onClick={() => setState(s)}
+            >
+              {tr(lang, s === "on" ? "with_ball" : "without_ball")}
+            </button>
+          ))}
+        </div>
+        <span className="dir">{tr(lang, "attacking")} →</span>
+      </div>
+      <div className="recap-shapes-grid">
+        {(["HOME", "AWAY"] as Side[]).map((side) => {
+          const team = meta.teams[side];
+          const shape = shapes[side][state];
+          return (
+            <figure key={side}>
+              <ShapePitch
+                positions={shape.positions}
+                color={team.colors[0]}
+                keeper={side === "HOME" ? "#f5c518" : "#9be15d"}
+                label={`${team.name}: ${shape.formation}`}
+              />
+              <figcaption>
+                <span className="team">
+                  <i style={{ background: team.colors[0] }} />
+                  {team.short}
+                </span>
+                <b>{shape.formation}</b>
+                <span>
+                  {tr(lang, "back_line")} {shape.back_line_m} m
+                </span>
+              </figcaption>
+            </figure>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+export function RecapCard({ overlay, text, meta, lang, mode, next }: PluginProps) {
   const d = overlay.data;
   const { HOME: home, AWAY: away } = meta.teams;
   const rows: [string, string, string, number, number][] = [
@@ -165,7 +277,9 @@ export function RecapCard({ overlay, text, meta, lang, mode }: PluginProps) {
   }
   const ratings = (d.ratings as Rating[] | undefined) ?? [];
   const goals = (d.goals as Goal[] | undefined) ?? [];
-  const title = overlay.headline.toLowerCase().includes("half") ? tr(lang, "half_time") : tr(lang, "full_time");
+  const shapes = mode !== "casual" ? (d.shapes as Shapes | undefined) : undefined;
+  const halfTime = overlay.headline.toLowerCase().includes("half");
+  const title = halfTime ? tr(lang, "half_time") : tr(lang, "full_time");
   return (
     <div className="recap">
       <div className="recap-title">{title}</div>
@@ -222,7 +336,9 @@ export function RecapCard({ overlay, text, meta, lang, mode }: PluginProps) {
           ))}
         </div>
       </div>
+      {shapes && <RecapShapes shapes={shapes} meta={meta} lang={lang} />}
       <p className="recap-text">{text}</p>
+      {!halfTime && next && <AnalysisButton next={next} lang={lang} />}
     </div>
   );
 }

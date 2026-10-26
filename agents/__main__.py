@@ -64,10 +64,10 @@ async def run(args: argparse.Namespace) -> None:
 def main() -> None:
     load_env()
     parser = argparse.ArgumentParser(prog="python -m agents", description="Run the Second Half studio team")
-    parser.add_argument("--seed", type=int, default=9)
+    parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--home", default="harbourside")
     parser.add_argument("--away", default="kingsmere")
-    parser.add_argument("--speed", type=float, default=10.0, help="viewing speed the Director schedules for")
+    parser.add_argument("--speed", type=float, default=8.0, help="viewing speed the Director schedules for")
     parser.add_argument("--mode", default="analyst", choices=["analyst", "casual", "player"])
     parser.add_argument("--lang", default="en", choices=["en", "es"])
     parser.add_argument("--model", default="auto", choices=["auto", "mock", "foundry"],

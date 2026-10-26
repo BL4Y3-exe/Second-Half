@@ -3,7 +3,8 @@
 It waits 1.5 s of match time before flagging, so a shot that goes in becomes
 a goal moment rather than a shot-speed moment, and it keeps the broadcast
 from cluttering: priority 1 always goes through, lower priorities need a gap
-since the last moment.
+since the last moment. A counter-press waits until its move is over: when the
+move ends in a big chance or a goal, that card tells it instead.
 """
 
 from __future__ import annotations
@@ -13,6 +14,8 @@ from .types import Moment
 SETTLE_S = 1.5
 GAP_S = {2: 40.0, 3: 120.0}  # match seconds since the last flagged moment
 KIND_GAP_S = {"killer_pass": 480.0, "momentum_swing": 240.0, "sprint_speed": 600.0, "shot_speed": 120.0}
+MOVE_S = 8.0  # a counter-press waits this long for a bigger chance from the same move
+BIGGER = ("goal", "big_chance")
 
 
 class Spotter:
@@ -22,10 +25,13 @@ class Spotter:
         self.pending: list[dict] = []
         self.last_t = -1e9
         self.last_kind_t: dict[str, float] = {}
+        self.chances: list[tuple[str | None, float]] = []  # team and time of every goal and big chance seen
         self._n = 0
 
     def watch(self, trigger: dict) -> None:
         self.pending.append(trigger)
+        if trigger["kind"] in BIGGER:
+            self.chances.append((trigger["team"], trigger["t"]))
 
     def recap(self, label: str, t: float, clock: str) -> Moment:
         self._n += 1
@@ -33,10 +39,13 @@ class Spotter:
 
     def release(self, now: float) -> list[tuple[Moment | None, dict, str]]:
         """Triggers that have settled: (moment or None if passed over, trigger, reason)."""
-        ready = [tr for tr in self.pending if now - tr["t"] >= SETTLE_S]
+        # A counter-press, and anything else about its shot, waits until the move is over.
+        held = {e for tr in self.pending if tr["kind"] == "counter_press" and now - tr["t"] < MOVE_S
+                for e in tr["source_events"]}
+        ready = [tr for tr in self.pending if now - tr["t"] >= SETTLE_S and not held & set(tr["source_events"])]
         if not ready:
             return []
-        self.pending = [tr for tr in self.pending if now - tr["t"] < SETTLE_S]
+        self.pending = [tr for tr in self.pending if not any(tr is r for r in ready)]
         # The goal trigger comes a moment after the shot's own triggers, so it may still be settling.
         goal_shots = {e for tr in ready + self.pending if tr["kind"] == "goal" for e in tr["source_events"]}
         out: list[tuple[Moment | None, dict, str]] = []
@@ -58,6 +67,9 @@ class Spotter:
     def _reject_reason(self, tr: dict, goal_shots: set[str]) -> str | None:
         if tr["kind"] != "goal" and set(tr["source_events"]) & goal_shots:
             return "part of a goal moment"
+        if tr["kind"] == "counter_press" and any(
+                team == tr["team"] and 0 <= t - tr["t"] <= MOVE_S for team, t in self.chances):
+            return "part of a bigger chance"
         if tr["priority"] == 1:
             return None
         if tr["t"] - self.last_t < GAP_S.get(tr["priority"], 60.0):

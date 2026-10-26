@@ -290,11 +290,11 @@ class MatchEngine:
         push = press = risk = 0.0
         tempo = 1.0
         if diff < 0 and minute >= 60:
-            push, press, risk, tempo = 5.0, 6.0, 0.25 + 0.1 * min(2, -diff), 0.85
+            push, press, risk, tempo = 3.0, 4.0, 0.15 + 0.06 * min(2, -diff), 0.9
         elif diff > 0 and minute >= 70:
-            push, press, risk, tempo = -6.0, -7.0, -0.15, 1.2
+            push, press, risk, tempo = -4.0, -4.0, -0.1, 1.12
         conf = self.confidence[side]
-        push += 3.0 * conf
+        push += 2.0 * conf
         return Mods(push=push, press=press, risk=risk, tempo=tempo)
 
     def _pressure(self, c: PState) -> float:
@@ -823,8 +823,7 @@ class MatchEngine:
             self.next_decision = min(self.next_decision, self.t + self.rng.uniform(0.6, 1.4))
         if d > 1.6 or self.t < self.tackle_ready_at or self.t < nearest.beaten_until or nearest.slot == 0:
             return
-        style = self.styles[nearest.side]
-        rate = 0.045 * (nearest.player.defending / 70) * (1.0 + 0.3 * (style.press_trigger > 12))
+        rate = 0.045 * (nearest.player.defending / 70)
         if self.rng.random() >= rate:
             return
         self.tackle_ready_at = self.t + 0.8

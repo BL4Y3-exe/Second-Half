@@ -5,8 +5,8 @@ import type { Lang, Mode } from "./types";
 
 export const MODE_NOTES: Record<Mode, Record<Lang, string>> = {
   analyst: {
-    en: "For fans who love tactics and numbers. Each story keeps the sharpest stats, three at most, and says what they show.",
-    es: "Para quien disfruta de la táctica y los números. Cada historia se queda con los datos más reveladores, tres como mucho, y explica qué muestran.",
+    en: "For fans who love tactics and numbers. The pitch draws each side's shape and marks every counter-press, and each story keeps the sharpest stats, three at most, and says what they show.",
+    es: "Para quien disfruta de la táctica y los números. El campo dibuja la estructura de cada equipo y marca cada contrapresión, y cada historia se queda con los datos más reveladores, tres como mucho, y explica qué muestran.",
   },
   casual: {
     en: "For watching with friends. Warm, simple lines with one number at most, and graphics without stat chips or jargon like xG.",
@@ -51,18 +51,21 @@ export const NOTES = {
   watch: "The match as a TV broadcast, with each viewer's own graphics and the agents behind them along the bottom.",
   analysis:
     "Everything behind the broadcast: momentum over the whole match, each agent's work on every moment, every version of each story, and the team numbers.",
-  setup: "Pick the clubs, the match number and the speed, then kick off.",
+  setup: "Pick the clubs and kick off a new match. The address bar keeps its number, so the link replays it.",
+  pause: "Stop the picture on this moment to study it (or press Space). The match keeps going for everyone else.",
+  resume: "Jump back to the live match, which kept playing while your picture was stopped (or press Space).",
   profile: "How this viewer watches: how much detail, which language and which club they support.",
   addViewer: "Add a guest with their own mode, language and club. Their screen plays in the corner.",
-  behind: "The agents who made the graphic on screen, in the order they worked on it.",
+  behind:
+    "Second Half is a multi-agent system: seven AI agents work every moment as a team. This strip shows the ones that made the graphic on screen (or the last one), in the order they handed it on.",
   program: "The live picture with the graphics the Director puts on air, as your viewer settings show them.",
   follow: "Keep showing whichever moment is on air now.",
   versions: "The Persona agent rewrites each approved story for every viewer mode and language, and each version is checked again.",
   home: "The home club. Clubs, players and matches are synthetic, so no real data is used.",
   away: "The away club. Clubs, players and matches are synthetic, so no real data is used.",
-  seed: "Which match gets played. The same number always replays the same match, kick for kick, so you can rerun a demo.",
-  speed: "How fast the match plays: 1x is real time, 40x plays a 45-minute half in just over a minute.",
-  kickOff: "Start this match from 00:00. Everyone watching sees the same live match.",
+  kickOff: "Start a new match between these clubs at the speed you picked.",
+  speed:
+    "The match plays at 8x, so the clock ticks over a match minute every 7 seconds and a whole match takes about 12 minutes.",
   plant:
     "Demo switch: changes one number in the first story and in every goal's first draft, so you can watch the Fact-checker catch it. The agent trace marks each one. Takes effect at kick off.",
   model: "The model writing the stories: a Microsoft Foundry deployment, or mock for the built-in scripted writer.",
@@ -87,6 +90,12 @@ export const STAT_NOTES: Record<string, string> = {
   Possession: "Share of the match each team has had the ball.",
   "Pass accuracy": "Share of passes that reached a teammate.",
   "Field tilt": "Share of the passes into the final third: which team is camped in the other half.",
+  "Counter-press wins":
+    "Balls a team lost in the opponent's half and won back within 8 seconds, Rangnick's rule for counter-pressing.",
+  "Pressing (PPDA)":
+    "Passes per defensive action: how many passes a team lets the opponent make in the opponent's own 60% of the pitch for each tackle, interception or foul it makes there. Lower means harder pressing: 10 or under is a high press, over 15 a team that sits deep.",
+  "Attacks by lane":
+    "Where each team gets the ball into the final third, from its own left wing to its right. The half-spaces are the strips between the wings and the centre, along the sides of the penalty area: from there a player can shoot, pass inside or go wide.",
   Corners: "Corner kicks won.",
   "Distance (km)": "How far the whole team has run.",
 };

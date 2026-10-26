@@ -27,12 +27,12 @@ class Style:
 
 
 STYLES: dict[str, Style] = {
-    "high_press": Style("high_press", press_line=9, press_trigger=15, attack_push=8, tempo=1.2,
+    "high_press": Style("high_press", press_line=6, press_trigger=12, attack_push=8, tempo=1.2,
                         directness=0.6, risk=0.55, width=1.05, shoot_bias=1.0),
     "possession": Style("possession", press_line=4, press_trigger=10, attack_push=10, tempo=1.5,
                         directness=0.2, risk=0.3, width=1.15, shoot_bias=0.9),
-    "counter": Style("counter", press_line=-8, press_trigger=7, attack_push=3, tempo=1.1,
-                     directness=1.0, risk=0.7, width=0.95, shoot_bias=1.15),
+    "counter": Style("counter", press_line=-2, press_trigger=7, attack_push=8, tempo=1.1,
+                     directness=1.0, risk=0.5, width=0.95, shoot_bias=1.35),
 }
 
 # (position code, x, y) per slot, in the attacking frame, for a mid block
@@ -101,7 +101,9 @@ def shape_target(
         cap = {"DEF": 72.0, "MID": 90.0, "FWD": 98.0}[group]
         floor = {"DEF": 10.0, "MID": 18.0, "FWD": 30.0}[group]
     else:
-        shift = 0.5 * (ball_x - 52.5) + style.press_line + mods.press
+        # A deep block leaves its forwards up the pitch, as an outlet for the counter-attack.
+        line = max(0.0, style.press_line) if group == "FWD" else style.press_line
+        shift = 0.5 * (ball_x - 52.5) + line + mods.press
         x = bx * 0.9 + shift
         y = 34 + (by - 34) * 0.8 + (ball_y - 34) * 0.35
         cap = {"DEF": 55.0, "MID": 75.0, "FWD": 90.0}[group]

@@ -14,7 +14,7 @@ from .state import SIDES
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m stats", description="Second Half stats engine")
     parser.add_argument("match", nargs="?", help="saved match JSON (default: simulate one)")
-    parser.add_argument("--seed", type=int, default=9)
+    parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--home", default="harbourside")
     parser.add_argument("--away", default="kingsmere")
     parser.add_argument("--json", action="store_true", help="print the full snapshot as JSON")

@@ -10,7 +10,8 @@ class Moment:
     """A candidate key moment flagged by the Spotter."""
 
     id: str
-    kind: str  # goal, big_chance, shot_speed, killer_pass, momentum_swing, sprint_speed, distance_10k, recap
+    # goal, big_chance, shot_speed, killer_pass, counter_press, momentum_swing, sprint_speed, distance_10k, recap
+    kind: str
     t: float
     clock: str
     priority: int  # 1 must show, 2 worth showing, 3 filler
@@ -35,10 +36,11 @@ class Facts:
 
     def for_model(self) -> dict:
         """The facts as a model sees them: without the helpers the scripted templates use (plural words,
-        Spanish snippets, flattened copies of the recap lists), which only add noise to a prompt."""
-        helper_prefixes = ("goals_line", "rating_", "goal_minute_", "goal_scorer_")
+        Spanish snippets, flattened copies of the recap lists) or the shapes' positions, which only add noise to a
+        prompt."""
+        helper_prefixes = ("goals_line", "shape_line", "rating_", "goal_minute_", "goal_scorer_")
         return {k: v for k, v in self.values.items()
-                if not k.endswith(("_word", "_es")) and not k.startswith(helper_prefixes)}
+                if not k.endswith(("_word", "_es")) and not k.startswith(helper_prefixes) and k != "shapes"}
 
 
 @dataclass

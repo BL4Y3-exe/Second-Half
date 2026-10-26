@@ -13,6 +13,7 @@ from .types import Facts, Moment
 
 PLUGIN_FOR = {
     "goal": "goal-card", "big_chance": "shot-card", "shot_speed": "shot-card", "killer_pass": "pass-card",
+    "counter_press": "press-card",
     "momentum_swing": "momentum-bar", "sprint_speed": "player-tag", "distance_10k": "player-tag",
     "recap": "recap-card",
 }
@@ -117,6 +118,7 @@ class Director:
             "big_chance": "BIG CHANCE",
             "shot_speed": "ROCKET",
             "killer_pass": "KILLER PASS",
+            "counter_press": f"COUNTER-PRESS · {f.get('team_short', '')}",
             "momentum_swing": f"MOMENTUM · {f.get('team_short', '')}",
             "sprint_speed": "TOP SPEED",
             "distance_10k": "10 KM CLUB",
@@ -126,9 +128,13 @@ class Director:
     def _data(self, plugin_id: str, moment: Moment, facts: Facts) -> dict:
         f = facts.values
         keep = {
-            "goal-card": ("player", "assist", "xg", "distance_m", "shot_speed_kmh", "score_home", "score_away"),
-            "shot-card": ("player", "xg", "shot_speed_kmh", "distance_m", "outcome_text", "outcome_text_es"),
+            "goal-card": ("player", "assist", "xg", "distance_m", "shot_speed_kmh", "score_home", "score_away",
+                          "won_back_s", "half_space"),
+            "shot-card": ("player", "xg", "shot_speed_kmh", "distance_m", "outcome_text", "outcome_text_es",
+                          "won_back_s", "half_space"),
             "pass-card": ("passer", "receiver", "difficulty", "difficulty_label", "distance_m", "lane_gap_m"),
+            "press-card": ("team", "player", "won_back_s", "shot_after_s", "xg", "outcome_text", "outcome_text_es",
+                           "counter_press_wins", "counter_presses"),
             "momentum-bar": ("team", "team_short", "momentum", "tilt_recent", "shots_recent"),
             "player-tag": ("player", "top_speed_kmh", "distance_km"),
             "recap-card": ("score_home", "score_away", "home_xg", "away_xg", "home_shots", "away_shots",
@@ -142,6 +148,8 @@ class Director:
         if plugin_id == "recap-card":
             data["ratings"] = f.get("ratings", [])
             data["goals"] = f.get("goals", [])
+            if "shapes" in f:
+                data["shapes"] = f["shapes"]
         return data
 
     def _telestrator(self, moment: Moment, facts: Facts) -> dict | None:
@@ -168,6 +176,9 @@ class Director:
             zones.append({"kind": "circle", "center": [round(mid[0], 1), round(mid[1], 1)],
                           "r": max(1.5, facts.values.get("lane_gap_m", 2.0)), "label": "the gap"})
             highlight = sorted({ps["player"], ps["receiver"]})
+        regain = seq[0] if seq[0]["type"] == "possession_change" else None
+        if regain is not None and (moment.kind == "counter_press" or "won_back_s" in facts.values):
+            zones.append({"kind": "circle", "center": regain["at"], "r": 2.0, "label": "won back"})
         if not arrows and not zones:
             return None
         # The stretch of play the browser replays under the drawing, in match seconds.

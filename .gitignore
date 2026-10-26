@@ -14,3 +14,4 @@ build/
 # generated matches (one small sample is committed on purpose)
 data/matches/*.json
 !data/matches/sample-*.json
+brag-output*/

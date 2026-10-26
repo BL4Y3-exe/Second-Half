@@ -85,6 +85,14 @@ h1 { margin: 0; font: 800 condensed 28px/1 var(--font); letter-spacing: 0.01em; 
 .setup-toggle:hover, .setup-toggle.on { border-color: #4a607b; }
 .setup-toggle svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.5; }
 .setup-toggle.on svg { transform: rotate(180deg); }
+.pause-button {
+  display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 14px; border-radius: 9px;
+  background: var(--panel); border: 1px solid var(--line); color: var(--text); font-size: 13.5px; font-weight: 600; cursor: pointer;
+}
+.pause-button svg { width: 11px; height: 11px; fill: currentColor; }
+.pause-button:hover { border-color: #4a607b; }
+.pause-button.on { background: var(--tally); border-color: var(--tally); color: #fff; }
+.tv .pause-button:not(.on) { background: var(--glass); border-color: var(--glass-line); backdrop-filter: blur(10px); }
 .setup-toggle .armed {
   padding: 1px 7px; border-radius: 10px; background: rgba(255, 177, 92, 0.18); color: var(--warn);
   font-size: 11.5px; font-weight: 600;
@@ -108,6 +116,7 @@ h1 { margin: 0; font: 800 condensed 28px/1 var(--font); letter-spacing: 0.01em; 
 .controls select:hover, .controls input:hover { border-color: #3b4f68; }
 .controls input { font-variant-numeric: tabular-nums; }
 .controls .vs { padding-bottom: 8px; color: var(--muted); font: 600 condensed 16px var(--font); }
+.controls .speed-note { font-size: 12px; color: var(--muted); width: fit-content; }
 .controls label.switch { flex-direction: row; align-items: center; gap: 8px; color: var(--text); font-size: 13.5px; cursor: pointer; }
 .switch input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); cursor: pointer; flex: none; }
 .kick-off {
@@ -137,6 +146,39 @@ h1 { margin: 0; font: 800 condensed 28px/1 var(--font); letter-spacing: 0.01em; 
 .pitch .ball { fill: #fff; stroke: #111; stroke-width: 0.15; filter: drop-shadow(0 0.2px 0.3px rgba(0, 0, 0, 0.6)); }
 .pitch .tag rect { fill: rgba(10, 14, 20, 0.85); }
 .pitch .tag text { fill: #fff; font: 600 1.4px var(--font); text-anchor: middle; }
+
+/* The analyst's team shapes, in chalk white and the Telestrator's yellow. The side on the ball: the shape round
+   the carrier, with the passing lanes in it (dashed where an opponent cuts one). The side without it: its back line
+   and the line in front, with the gap between them marked under the pitch. */
+.shapes { pointer-events: none; }
+.shapes .block polyline { fill: none; stroke: #ffd166; stroke-width: 0.24; stroke-linejoin: round; stroke-linecap: round; opacity: 0.7; }
+.shapes .block polyline.back-line { stroke-width: 0.3; opacity: 0.95; }
+.shapes .gap line { stroke: #ffd166; stroke-width: 0.2; }
+.shapes text {
+  fill: #fff; font: 600 1.35px var(--font); text-anchor: middle;
+  paint-order: stroke; stroke: rgba(0, 0, 0, 0.75); stroke-width: 0.35; stroke-linejoin: round;
+}
+.shapes .shape-name { font-weight: 800; font-size: 1.6px; letter-spacing: 0.12px; text-transform: uppercase; }
+.shapes .support polygon { fill: rgba(255, 255, 255, 0.14); }
+.shapes .support .link { stroke: rgba(255, 255, 255, 0.7); stroke-width: 0.2; }
+.shapes .support .lane { stroke: #fff; stroke-width: 0.32; stroke-linecap: round; }
+.shapes .support .lane.cut { stroke: rgba(255, 255, 255, 0.6); stroke-width: 0.22; stroke-dasharray: 0.6 0.5; }
+
+/* Counter-press marks: a ring where the ball was won back (in the pressing team's colour) or played through
+   (grey), with a small label that says which and how fast. */
+.lane-lines line { stroke: rgba(255, 255, 255, 0.2); stroke-width: 0.12; stroke-dasharray: 0.8 0.8; }
+.half-space { pointer-events: none; animation: fade-in 0.3s ease; }
+.half-space > rect { opacity: 0.22; }
+.half-space > line { stroke: rgba(255, 255, 255, 0.7); stroke-width: 0.2; }
+.half-space-tag rect { fill: rgba(10, 14, 20, 0.86); stroke: rgba(255, 255, 255, 0.35); stroke-width: 0.1; }
+.half-space-tag text { fill: #fff; font: 700 1.35px var(--font); text-anchor: middle; }
+.presses { pointer-events: none; }
+.presses .chase line { stroke-width: 0.5; stroke-linecap: round; }
+.presses .chase line.halo { stroke: rgba(255, 255, 255, 0.9); stroke-width: 0.95; }
+.presses .press-tag { animation: fade-in 0.25s ease; }
+.presses .press-tag rect { fill: rgba(10, 14, 20, 0.86); stroke: rgba(255, 255, 255, 0.35); stroke-width: 0.1; }
+.presses .press-tag text { fill: #fff; font: 700 1.35px var(--font); text-anchor: middle; }
+.presses .press-tag.escaped text { fill: rgba(255, 255, 255, 0.75); font-weight: 600; }
 
 .overlay-top-left { position: absolute; top: 12px; left: 12px; }
 .overlay-banner {
@@ -172,6 +214,23 @@ h1 { margin: 0; font: 800 condensed 28px/1 var(--font); letter-spacing: 0.01em; 
   font: 800 condensed 14px var(--font); letter-spacing: 0.1em; text-transform: uppercase;
 }
 .replay-badge::before { content: ""; position: absolute; left: 9px; top: 50%; width: 7px; height: 7px; margin-top: -3.5px; border-radius: 50%; background: #fff; animation: blink 1s infinite; }
+.paused-badge {
+  position: absolute; top: 12px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 10px;
+  padding: 4px 12px; border-radius: 6px; background: rgba(10, 14, 20, 0.88);
+  font: 800 condensed 14px var(--font); letter-spacing: 0.14em; text-transform: uppercase;
+}
+.paused-badge b { color: var(--gold); font-variant-numeric: tabular-nums; letter-spacing: 0.04em; }
+.pitch-wrap.flat .paused-badge { top: 56px; }
+/* Paused, the graphics on screen stop counting down too. */
+.pitch-wrap.paused * { animation-play-state: paused !important; }
+.full-card { position: relative; width: min(760px, 100%); max-height: 100%; display: flex; flex-direction: column; }
+.full-card > * { min-height: 0; }
+.close-card {
+  position: absolute; top: -14px; right: -14px; z-index: 1; width: 34px; height: 34px; border-radius: 50%; display: grid;
+  place-items: center; padding: 0 0 2px; border: 1px solid rgba(255, 255, 255, 0.25); background: #121a24; color: #fff;
+  font: 400 24px/1 var(--font); cursor: pointer; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+}
+.close-card:hover { background: #1f2a38; border-color: rgba(255, 255, 255, 0.5); }
 
 .lower-third {
   position: relative; width: min(760px, 100%); padding: 10px 16px 12px; border-radius: 10px; overflow: hidden;
@@ -228,6 +287,30 @@ h1 { margin: 0; font: 800 condensed 28px/1 var(--font); letter-spacing: 0.01em; 
 .rating { display: grid; grid-template-columns: 6px 1fr auto; gap: 8px; align-items: center; font-size: 13.5px; padding: 3px 0; }
 .rating i { width: 6px; height: 14px; border-radius: 2px; }
 .rating b { color: var(--gold); font-variant-numeric: tabular-nums; }
+.recap-shapes { margin-top: 6px; padding-top: 10px; border-top: 1px solid var(--line); }
+.recap-shapes-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.recap-shapes-head .label { text-align: left; margin: 0; }
+.recap-shapes-head .seg button { padding: 4px 11px; font-size: 12.5px; }
+.recap-shapes-head .dir { margin-left: auto; font-size: 12px; color: var(--muted); }
+.recap-shapes-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 8px; }
+@media (max-width: 720px) { .recap-shapes-grid { grid-template-columns: 1fr; } }
+.recap-shapes figure { margin: 0; }
+.recap-shapes .shape-pitch { border-radius: 6px; }
+.shape-pitch .shape-dot { stroke: rgba(10, 14, 20, 0.7); stroke-width: 0.25; transition: transform 0.6s ease; }
+@media (prefers-reduced-motion: reduce) { .shape-pitch .shape-dot { transition: none; } }
+.recap-shapes figcaption { display: flex; align-items: center; gap: 10px; margin-top: 6px; font-size: 12.5px; color: var(--muted); }
+.recap-shapes figcaption .team { display: flex; align-items: center; gap: 6px; color: var(--text); font: 800 condensed 14px var(--font); }
+.recap-shapes figcaption .team i { width: 5px; height: 14px; border-radius: 2px; }
+.recap-shapes figcaption b { color: #fff; font-weight: 600; font-variant-numeric: tabular-nums; }
+.to-analysis { display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 14px; flex-wrap: wrap; }
+.to-analysis button {
+  display: inline-flex; align-items: center; gap: 8px; padding: 9px 18px; border: 0; border-radius: 20px; cursor: pointer;
+  background: var(--accent); color: var(--accent-ink); font: 700 14.5px/1 var(--font);
+}
+.to-analysis button:hover { filter: brightness(1.08); }
+.to-analysis svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.to-analysis span { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; text-transform: none; font-weight: 400; }
+.overlay-banner .to-analysis { margin-top: 10px; text-transform: none; }
 .recap-text { margin: 12px 0 0; padding-top: 10px; border-top: 1px solid var(--line); font-size: 14px; line-height: 1.45; color: #cfd8e3; }
 
 /* --- Telestrator ----------------------------------------------------------------------------------------- */
@@ -251,7 +334,7 @@ h1 { margin: 0; font: 800 condensed 28px/1 var(--font); letter-spacing: 0.01em; 
 .pin .pin-value { fill: #fff; font: 800 condensed 2.4px var(--font); text-anchor: middle; }
 
 /* --- outside (sandboxed) plugins --------------------------------------------------------------------------- */
-.sandboxed iframe { display: block; width: 100%; border: 0; background: transparent; margin-top: 4px; }
+.sandboxed iframe { display: block; width: 100%; height: var(--plugin-h, 150px); border: 0; background: transparent; margin-top: 4px; }
 .sandboxed .credit { display: block; margin-top: 2px; font-size: 10.5px; color: var(--muted); letter-spacing: 0.02em; }
 
 /* --- viewer controls (in a profile's pop-over) ------------------------------------------------------------- */
@@ -268,31 +351,37 @@ h1 { margin: 0; font: 800 condensed 28px/1 var(--font); letter-spacing: 0.01em; 
 .viewer-note.previewing b { color: var(--accent); }
 
 /* ===========================================================================================================
-   WATCH: the living room. The pitch fills the screen through a tilted main camera; the score bug, the bar and
+   WATCH: the living room. The whole pitch shows through a tilted main camera; the score bug, the bar and
    who is watching float on top, the guest's screen sits in the corner, and the strip along the bottom shows
    the relay of agents behind the graphic on air.
    =========================================================================================================== */
-.tv { position: relative; height: 100vh; min-height: 620px; overflow: hidden; background: var(--night); color: #f4f6f8; }
+.tv {
+  position: relative; height: 100vh; min-height: 620px; overflow: hidden; background: var(--night); color: #f4f6f8;
+  /* The camera is tilted 36deg with a perspective of 3 pitch widths, so the whole pitch shows 0.62 pitch widths
+     tall and 1.15 wide at the near touchline. Size it to fit between the top bar and the strip at the bottom. */
+  --cam-w: min(calc((max(100vh, 620px) - 206px) / 0.62), calc((100vw - 96px) / 1.15));
+  --cam-top: calc(98px + (max(100vh, 620px) - 206px - var(--cam-w) * 0.62) / 2);
+}
 
 .pitch-wrap.tv {
   position: absolute; inset: 0; border-radius: 0; box-shadow: none;
-  perspective: 139vh; perspective-origin: 50% -10%;
+  perspective: calc(var(--cam-w) * 3); perspective-origin: 50% var(--cam-top);
   background:
     radial-gradient(closest-side at 18% -12%, rgba(255, 255, 240, 0.14), transparent),
     radial-gradient(closest-side at 82% -12%, rgba(255, 255, 240, 0.14), transparent),
     radial-gradient(120% 70% at 50% -10%, #1d2a38 0%, #0a1018 45%, var(--night) 75%);
 }
 .pitch-wrap.tv .camera {
-  position: absolute; left: 50%; top: 8.5vh; width: min(78vw, 139vh);
-  transform-origin: 50% 0; transform: translateX(-50%) rotateX(49deg);
+  position: absolute; left: 50%; top: var(--cam-top); width: var(--cam-w);
+  transform-origin: 50% 0; transform: translateX(-50%) rotateX(36deg);
 }
 .pitch-wrap.tv .camera .pitch { filter: saturate(1.05); }
 .pitch-wrap.tv::after, .pitch-wrap.pip::after { content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none; }
 .pitch-wrap.tv::after {
   background:
-    linear-gradient(180deg, rgba(4, 7, 11, 0.85) 0%, rgba(4, 7, 11, 0) 16%),
+    linear-gradient(180deg, rgba(4, 7, 11, 0.85) 0%, rgba(4, 7, 11, 0) 11%),
     radial-gradient(140% 90% at 50% 40%, rgba(0, 0, 0, 0) 55%, rgba(0, 0, 0, 0.55) 100%),
-    linear-gradient(0deg, rgba(4, 7, 11, 0.95) 0%, rgba(4, 7, 11, 0) 34%);
+    linear-gradient(0deg, rgba(4, 7, 11, 0.95) 0%, rgba(4, 7, 11, 0) 16%);
 }
 .pitch-wrap.tv > :not(.camera), .pitch-wrap.pip > :not(.camera) { z-index: 2; }
 .pitch-wrap.tv .overlay-top-left, .pitch-wrap.pip .overlay-top-left { display: none; }
@@ -302,50 +391,59 @@ h1 { margin: 0; font: 800 condensed 28px/1 var(--font); letter-spacing: 0.01em; 
 }
 .pitch-wrap.tv .replay-badge::before { left: 12px; background: #191200; }
 .pitch-wrap.tv .overlay-banner { top: 104px; bottom: auto; padding: 10px 24px; font-size: 30px; background: var(--glass); }
+.pitch-wrap.tv .paused-badge { top: 104px; padding: 9px 20px 8px; font-size: 22px; background: var(--glass); backdrop-filter: blur(10px); }
 .pitch-wrap.tv .slot-full-screen { padding: 104px 40px 112px; background: rgba(4, 7, 11, 0.6); }
 .pitch-wrap.tv .slot-corner { top: auto; right: 40px; bottom: 120px; max-width: 380px; }
+.pitch-wrap.tv .slot-corner.left { right: auto; left: 40px; }
 .pitch-wrap.tv .corner-card { padding: 12px 16px; background: var(--glass); backdrop-filter: blur(10px); }
 .pitch-wrap.tv .corner-card p { font-size: 16px; }
 
-/* The broadcast lower third: a team-coloured tab over a white card. */
-.pitch-wrap.tv .slot-lower-third { left: 40px; right: auto; bottom: 116px; width: min(1080px, 60vw); padding: 0; justify-content: flex-start; }
+/* The broadcast lower third: a team-coloured tab over a white card, no wider than its words, on the side of the
+   screen the play isn't. */
+.pitch-wrap.tv .slot-lower-third { left: 40px; right: auto; bottom: 116px; width: min(760px, 42vw); padding: 0; justify-content: flex-start; }
+.pitch-wrap.tv .slot-lower-third.right { left: auto; right: 40px; justify-content: flex-end; }
 .pitch-wrap.tv .lower-third, .pitch-wrap.pip .lower-third {
   width: 100%; display: flex; flex-direction: column; overflow: visible; backdrop-filter: none;
-  background: #fff; color: var(--card-ink); border-left: 12px solid var(--team); border-radius: 0 10px 10px 10px;
-  padding: 16px 24px 20px; box-shadow: none; filter: drop-shadow(0 18px 40px rgba(0, 0, 0, 0.5));
+  background: #fff; color: var(--card-ink); border-left: 8px solid var(--team); border-radius: 0 10px 10px 10px;
+  padding: 12px 18px 14px; box-shadow: none; filter: drop-shadow(0 14px 32px rgba(0, 0, 0, 0.5));
 }
+.pitch-wrap.tv .lower-third { width: auto; min-width: min(100%, 400px); }
 .pitch-wrap.tv .lt-head, .pitch-wrap.pip .lt-head {
-  position: absolute; left: -12px; bottom: 100%; margin: 0; gap: 14px; padding: 9px 18px 7px;
+  position: absolute; left: -8px; bottom: 100%; margin: 0; gap: 10px; padding: 7px 14px 5px;
   background: var(--team); border-radius: 6px 6px 0 0; color: #fff;
 }
 .pitch-wrap.tv .fallback .lt-head, .pitch-wrap.pip .fallback .lt-head { background: #4a5868; }
 .pitch-wrap.tv .lt-tag, .pitch-wrap.pip .lt-tag {
-  background: none; color: #fff; padding: 0; font-size: 26px; line-height: 1; letter-spacing: 0.12em;
+  background: none; color: #fff; padding: 0; font-size: 20px; line-height: 1; letter-spacing: 0.12em;
 }
-.pitch-wrap.tv .lt-clock { color: rgba(255, 255, 255, 0.78); font-size: 19px; }
+.pitch-wrap.tv .lt-clock { color: rgba(255, 255, 255, 0.78); font-size: 15px; }
 .pitch-wrap.tv .lt-check {
-  margin-left: 6px; padding: 4px 10px; border-radius: 20px; background: rgba(255, 255, 255, 0.94); color: #137a3f;
-  font: 600 13px/1 var(--font); letter-spacing: 0.04em;
+  margin-left: 4px; padding: 3px 8px; border-radius: 20px; background: rgba(255, 255, 255, 0.94); color: #137a3f;
+  font: 600 11.5px/1 var(--font); letter-spacing: 0.04em;
 }
 .pitch-wrap.tv .lt-check.warn { color: #8a4b00; }
 .pitch-wrap.tv .lt-body { display: contents; }
-.pitch-wrap.tv .lt-main { order: 1; font-size: 50px; line-height: 0.98; gap: 4px 18px; }
-.pitch-wrap.tv .lt-main.lt-line { font: 600 26px/1.32 var(--font); }
-.pitch-wrap.tv .lt-score { color: var(--card-ink-2); font-size: 30px; font-variant-numeric: tabular-nums; }
+.pitch-wrap.tv .lt-main { order: 1; font-size: 34px; line-height: 1; gap: 2px 12px; }
+.pitch-wrap.tv .lt-main.lt-line { font: 600 19px/1.32 var(--font); }
+.pitch-wrap.tv .lt-score { color: var(--card-ink-2); font-size: 22px; font-variant-numeric: tabular-nums; }
 .pitch-wrap.tv .lt-arrow { color: #8a94a3; }
-.pitch-wrap.tv .lt-outcome { color: var(--card-ink-2); font-size: 26px; }
-.pitch-wrap.tv .lt-text { order: 2; margin: 10px 0 0; max-width: 64ch; font: 500 22px/1.38 var(--font); color: #1b2430; text-wrap: pretty; }
-.pitch-wrap.tv .lt-chips, .pitch-wrap.tv .lt-tilt { order: 3; margin-top: 14px; }
-.pitch-wrap.tv .lt-chips { gap: 8px; }
+.pitch-wrap.tv .lt-outcome { color: var(--card-ink-2); font-size: 19px; }
+.pitch-wrap.tv .lt-text { order: 2; margin: 6px 0 0; font: 500 17.5px/1.4 var(--font); color: #1b2430; text-wrap: pretty; }
+.pitch-wrap.tv .lt-chips, .pitch-wrap.tv .lt-tilt { order: 3; margin-top: 10px; }
+.pitch-wrap.tv .lt-chips { gap: 6px; }
 .pitch-wrap.tv .lt-chips .chip {
-  background: #eef1f5; border: 0; padding: 7px 11px; border-radius: 6px; color: var(--card-ink-2); font: 500 15px/1 var(--mono);
+  background: #eef1f5; border: 0; padding: 5px 8px; border-radius: 5px; color: var(--card-ink-2); font: 500 13px/1 var(--mono);
 }
 .pitch-wrap.tv .lt-chips .chip b { color: var(--card-ink); font-weight: 700; }
-.pitch-wrap.tv .sandboxed { order: 3; margin-top: 14px; padding: 8px 10px 6px; border-radius: 8px; background: #0b1118; }
-.pitch-wrap.tv .lt-tilt-bar { height: 12px; }
-.pitch-wrap.tv .lt-tilt-label { color: var(--card-ink-2); font-size: 16px; }
+.pitch-wrap.tv .sandboxed { order: 3; margin-top: 10px; padding: 6px 8px 4px; border-radius: 8px; background: #0b1118; }
+.pitch-wrap.tv .lt-tilt-bar { height: 10px; }
+.pitch-wrap.tv .lt-tilt-label { color: var(--card-ink-2); font-size: 14px; }
 .pitch-wrap.tv .lt-tilt-label b { color: var(--card-ink); }
-.pitch-wrap.tv .lt-timer, .pitch-wrap.pip .lt-timer { height: 4px; border-radius: 0 0 10px 0; opacity: 1; }
+.pitch-wrap.tv .lt-timer, .pitch-wrap.pip .lt-timer { height: 3px; border-radius: 0 0 10px 0; opacity: 1; }
+/* A card that carries a chart (an outside plugin's) is a fixed size, so the chart has room. */
+.pitch-wrap.tv .slot-lower-third.has-chart { width: min(600px, 38vw); }
+.pitch-wrap.tv .has-chart .lower-third { width: 100%; }
+.pitch-wrap.tv .has-chart .sandboxed iframe { height: calc(var(--plugin-h, 150px) * 0.72); }
 
 /* Top of the screen: score bug, the bar, who's watching. */
 .tv-top {
@@ -392,16 +490,19 @@ h1 { margin: 0; font: 800 condensed 28px/1 var(--font); letter-spacing: 0.01em; 
 /* The guest's screen in the corner. */
 .tv-pip {
   position: absolute; right: 40px; top: 104px; z-index: 4; width: min(30vw, 500px); aspect-ratio: 16 / 9;
-  border-radius: 14px; overflow: hidden; border: 2px solid rgba(255, 255, 255, 0.85);
+  container-type: inline-size; border-radius: 14px; overflow: hidden; border: 2px solid rgba(255, 255, 255, 0.85);
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6); background: #0a1018; animation: fade-in 0.3s ease;
 }
 .pitch-wrap.pip {
-  position: absolute; inset: 0; border-radius: 0; box-shadow: none; perspective: 520px; perspective-origin: 50% -10%;
+  position: absolute; inset: 0; border-radius: 0; box-shadow: none; perspective: 240cqw; perspective-origin: 50% 3.3cqw;
   background: radial-gradient(120% 70% at 50% -10%, #1d2a38 0%, #0a1018 60%);
 }
-.pitch-wrap.pip .camera { position: absolute; left: 50%; top: 2px; width: 94%; transform-origin: 50% 0; transform: translateX(-50%) rotateX(44deg); }
-.pitch-wrap.pip::after { background: linear-gradient(0deg, rgba(4, 7, 11, 0.9) 0%, rgba(4, 7, 11, 0) 45%); }
+/* The main screen's camera at 80% of the width: 50% of it tall, which leaves an even margin in a 16:9 screen. */
+.pitch-wrap.pip .camera { position: absolute; left: 50%; top: 3.3cqw; width: 80%; transform-origin: 50% 0; transform: translateX(-50%) rotateX(36deg); }
+.pitch-wrap.pip::after { background: linear-gradient(0deg, rgba(4, 7, 11, 0.9) 0%, rgba(4, 7, 11, 0) 20%); }
 .pitch-wrap.pip .replay-badge, .pitch-wrap.pip .slot-corner { display: none; }
+.pitch-wrap.pip .paused-badge { top: 6px; font-size: 12px; padding: 3px 9px; }
+.pitch-wrap.pip .close-card { top: 4px; right: 4px; width: 24px; height: 24px; font-size: 17px; }
 .pitch-wrap.pip .slot-lower-third { left: 10px; right: 10px; bottom: 10px; padding: 0; }
 .pitch-wrap.pip .lower-third { padding: 8px 12px 10px; border-left-width: 6px; }
 .pitch-wrap.pip .lt-head { left: -6px; padding: 5px 10px 3px; }
@@ -426,9 +527,14 @@ h1 { margin: 0; font: 800 condensed 28px/1 var(--font); letter-spacing: 0.01em; 
   position: absolute; left: 0; right: 0; bottom: 0; z-index: 5; height: 92px; display: flex; align-items: center; gap: 18px;
   padding: 0 40px; background: rgba(5, 8, 12, 0.92); border-top: 1px solid var(--glass-line); backdrop-filter: blur(8px);
 }
-.behind-title { flex: none; width: 156px; display: flex; flex-direction: column; gap: 5px; }
-.behind-title span { font: 700 12px/1.2 var(--font); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); }
-.behind-title b { font: 600 15px/1.2 var(--font); text-transform: capitalize; }
+.behind-title { flex: none; width: 172px; display: flex; flex-direction: column; gap: 5px; }
+.behind-title span {
+  display: flex; align-items: center; gap: 7px; width: fit-content;
+  font: 800 13px/1.2 var(--font); letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); white-space: nowrap;
+}
+.behind-title span i { width: 7px; height: 7px; border-radius: 50%; background: var(--ink-3); flex: none; }
+.behind-title span i.on { background: #3ddc84; animation: blink 1.6s infinite; }
+.behind-title b { font: 600 15px/1.2 var(--font); }
 .relay {
   position: relative; list-style: none; margin: 0; padding: 4px 0; display: flex; align-items: center; flex: 1; min-width: 0;
   overflow-x: auto; scrollbar-width: thin; scrollbar-color: var(--glass-line) transparent;
@@ -456,17 +562,11 @@ h1 { margin: 0; font: 800 condensed 28px/1 var(--font); letter-spacing: 0.01em; 
 .hop.planted .hop-text span { color: var(--warn); }
 .hop.skipped .dot { background: rgba(255, 255, 255, 0.08); color: var(--ink-3); }
 .relay-empty { flex: 1; margin: 0; color: var(--ink-3); font-size: 15px; }
-.behind-more {
-  flex: none; display: inline-flex; align-items: center; gap: 8px; padding: 9px 16px; border-radius: 20px; cursor: pointer;
-  background: rgba(255, 255, 255, 0.06); border: 1px solid var(--glass-line); color: #fff; font: 600 14.5px/1 var(--font);
-}
-.behind-more:hover { background: rgba(255, 255, 255, 0.12); }
-.behind-more svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
-
 .tv-waiting .placeholder { position: absolute; inset: 0; border: 0; border-radius: 0; min-height: 0; color: var(--ink-3); }
 
 @media (max-width: 1700px) {
   .hop.ok .hop-text span { display: none; } /* the Analysis view has the detail */
+  .watching { display: none; }
 }
 @media (max-width: 1500px) {
   .tv-top { grid-template-columns: auto minmax(0, 1fr) auto; padding: 22px 28px 0; }
@@ -478,11 +578,14 @@ h1 { margin: 0; font: 800 condensed 28px/1 var(--font); letter-spacing: 0.01em; 
   .add-viewer { width: 46px; height: 46px; }
   .pitch-wrap.tv .replay-badge { top: 92px; left: 28px; }
   .tv-pip { right: 28px; top: 92px; }
-  .pitch-wrap.tv .slot-lower-third { left: 28px; width: min(1000px, 66vw); }
-  .pitch-wrap.tv .lt-main { font-size: 40px; }
-  .pitch-wrap.tv .lt-text { font-size: 19px; }
+  .pitch-wrap.tv .slot-lower-third { left: 28px; width: min(680px, 48vw); }
+  .pitch-wrap.tv .slot-lower-third.right { left: auto; right: 28px; }
+  .pitch-wrap.tv .slot-corner { right: 28px; }
+  .pitch-wrap.tv .slot-corner.left { right: auto; left: 28px; }
+  .pitch-wrap.tv .lt-main { font-size: 30px; }
+  .pitch-wrap.tv .lt-text { font-size: 16.5px; }
   .behind { padding: 0 28px; gap: 16px; }
-  .behind-title { width: 150px; }
+  .behind-title { width: 160px; }
 }
 
 /* A phone or a narrow window: the picture goes flat and everything stacks. */
@@ -499,15 +602,16 @@ h1 { margin: 0; font: 800 condensed 28px/1 var(--font); letter-spacing: 0.01em; 
   .pitch-wrap.tv .camera { position: relative; left: auto; top: auto; width: 100%; transform: none; }
   .pitch-wrap.tv::after { display: none; }
   .pitch-wrap.tv .slot-lower-third { position: static; width: auto; padding: 44px 16px 0; }
-  .pitch-wrap.tv .lower-third { padding: 12px 14px 14px; border-left-width: 8px; }
-  .pitch-wrap.tv .lt-head { left: -8px; padding: 7px 12px 5px; gap: 10px; }
+  .pitch-wrap.tv .slot-lower-third.has-chart { width: auto; }
+  .pitch-wrap.tv .paused-badge { top: 8px; font-size: 14px; padding: 4px 12px; }
+  .pitch-wrap.tv .lower-third { width: 100%; padding: 12px 14px 14px; }
+  .pitch-wrap.tv .lt-head { padding: 7px 12px 5px; }
   .pitch-wrap.tv .lt-tag { font-size: 19px; }
-  .pitch-wrap.tv .lt-clock { font-size: 15px; }
-  .pitch-wrap.tv .lt-check { font-size: 11px; padding: 3px 8px; }
+  .pitch-wrap.tv .lt-check { font-size: 11px; }
   .pitch-wrap.tv .lt-main { font-size: 28px; }
   .pitch-wrap.tv .lt-text { font-size: 16px; }
-  .pitch-wrap.tv .lt-chips .chip { font-size: 13px; }
   .pitch-wrap.tv .slot-corner { top: 8px; right: 8px; bottom: auto; max-width: 62%; }
+  .pitch-wrap.tv .slot-corner.left { left: auto; right: 8px; }
   .pitch-wrap.tv .replay-badge { top: 8px; left: 8px; font-size: 13px; }
   .pitch-wrap.tv .slot-full-screen { position: fixed; z-index: 30; padding: 16px; }
   .pitch-wrap.tv .overlay-banner { bottom: 12px; font-size: 20px; }
@@ -701,6 +805,17 @@ mark.ok { background: rgba(95, 224, 176, 0.16); color: var(--ok); }
 .stat-row .v { font-weight: 600; }
 .stat-row .right { text-align: right; }
 .stat-row .label { display: block; text-align: center; font-size: 12px; color: var(--muted); margin-bottom: 3px; }
+.stat-row .words { display: flex; justify-content: space-between; margin-top: 3px; font-size: 11px; color: var(--muted); }
+.lanes { grid-column: 1 / -1; margin-top: 2px; }
+.lanes > .label { display: block; text-align: center; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.lanes-grid { display: grid; grid-template-columns: 44px repeat(5, 1fr); gap: 5px 8px; align-items: center; font-variant-numeric: tabular-nums; }
+.lane-name { font-size: 11px; color: var(--muted); text-align: center; white-space: nowrap; }
+.lane-name.half { color: var(--text); font-weight: 600; }
+.lane-team { font-weight: 700; font-size: 12.5px; }
+.lane-cell { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.lane-cell b { font-weight: 600; font-size: 13px; }
+.lane-cell .track { display: block; align-self: stretch; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.lane-cell .track i { display: block; height: 100%; border-radius: 2px; transition: width 0.6s ease; }
 .split { display: flex; height: 5px; border-radius: 3px; overflow: hidden; gap: 2px; }
 .split .home { background: var(--home); transition: width 0.6s ease; }
 .split .away { background: var(--away); transition: width 0.6s ease; }
@@ -747,7 +862,7 @@ mark.ok { background: rgba(95, 224, 176, 0.16); color: var(--ok); }
 }
 .note-tip.below { transform: translate(-50%, 0); }
 .note-tip.on { opacity: 1; visibility: visible; }
-.stat-row .label[data-note], .gauge-label[data-note], .trace-totals [data-note], .desk .who b[data-note],
+.stat-row .label[data-note], .lanes > .label[data-note], .gauge-label[data-note], .trace-totals [data-note], .desk .who b[data-note],
 .hop-text b[data-note], .behind-title span[data-note], .ways h3[data-note], .panel h2[data-note] {
   cursor: help; text-decoration: underline dotted rgba(148, 165, 185, 0.55); text-underline-offset: 3px;
 }

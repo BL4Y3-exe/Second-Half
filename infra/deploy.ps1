@@ -9,9 +9,9 @@ Run it from the repository root after `az login`:
 
 It reads FOUNDRY_PROJECT_ENDPOINT and FOUNDRY_MODEL from .env (or takes them as
 parameters), finds the Foundry resource and its resource group, and deploys
-infra\main.bicep with the container image GitHub Actions publishes for this
-repository (ghcr.io/<owner>/<repo>:latest). Run it again after a push to roll
-out the new image.
+infra\main.bicep with the container image GitHub Actions built for the commit
+you are on (ghcr.io/<owner>/<repo>:sha-<commit>). Run it again after a push,
+once the Image job has finished, to roll out the new image.
 #>
 param(
     [string] $FoundryProjectEndpoint,
@@ -56,32 +56,36 @@ if (-not $group) {
     throw "Couldn't find the Foundry resource '$account' in your subscription. Is az login using the right account?"
 }
 
-# The image GitHub Actions publishes for this repository. It has to be public so Azure can pull it.
+# Which commit is going out; /api/health shows it.
+$release = "dev"
+if (Get-Command git -ErrorAction SilentlyContinue) {
+    $commit = git -C $root rev-parse HEAD
+    if ($LASTEXITCODE -eq 0 -and $commit) { $release = $commit.Substring(0, 7) }
+}
+
+# The image GitHub Actions built for this commit, which it tags sha-<commit>. Naming the commit rather than :latest
+# makes Azure pull the new image: asked for :latest again, it can start the app from the copy it already has.
+# The package has to be public so Azure can pull it.
 if (-not $Image) {
-    if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-        throw "git isn't installed here; pass -Image ghcr.io/<owner>/<repo>:latest."
+    if ($release -eq "dev") {
+        throw "Couldn't read the current commit from git; pass -Image ghcr.io/<owner>/<repo>:sha-<commit>."
     }
     $origin = git -C $root remote get-url origin
     if ($LASTEXITCODE -ne 0 -or $origin -notmatch 'github\.com[:/](.+?)(\.git)?/?$') {
-        throw "Couldn't work out the GitHub repository from git; pass -Image ghcr.io/<owner>/<repo>:latest."
+        throw "Couldn't work out the GitHub repository from git; pass -Image ghcr.io/<owner>/<repo>:sha-<commit>."
     }
     $repo = $Matches[1].ToLower()
-    $Image = "ghcr.io/$($repo):latest"
+    $Image = "ghcr.io/$($repo):sha-$release"
     try {
         $token = (Invoke-RestMethod -Uri "https://ghcr.io/token?scope=repository:$($repo):pull").token
         $accept = "application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json"
-        Invoke-WebRequest -Method Head -UseBasicParsing -Uri "https://ghcr.io/v2/$repo/manifests/latest" `
+        Invoke-WebRequest -Method Head -UseBasicParsing -Uri "https://ghcr.io/v2/$repo/manifests/sha-$release" `
             -Headers @{ Authorization = "Bearer $token"; Accept = $accept } | Out-Null
     } catch {
-        throw ("Azure can't pull $Image yet. Check that the Image job in GitHub Actions has run, and that the " +
-            "package is public: GitHub > your profile > Packages > second-half > Package settings > Change visibility.")
+        throw ("Azure can't pull $Image yet. Push commit $release and wait for the Image job in GitHub Actions to " +
+            "finish. If it has, check that the package is public: GitHub > your profile > Packages > second-half > " +
+            "Package settings > Change visibility.")
     }
-}
-
-$release = "dev"
-if (Get-Command git -ErrorAction SilentlyContinue) {
-    $commit = git -C $root rev-parse --short=7 HEAD
-    if ($LASTEXITCODE -eq 0 -and $commit) { $release = $commit }
 }
 
 # Foundry User used to be called Azure AI User; the role id is the same.

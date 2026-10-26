@@ -40,7 +40,9 @@ export function Sandboxed({ overlay, text, meta, lang }: PluginProps) {
         title={info.name}
         sandbox="allow-scripts"
         referrerPolicy="no-referrer"
-        style={{ height: info.height_px }}
+        // The plugin's page has the browser's default light scheme. Ours is dark, and an iframe whose scheme differs
+        // from its page gets an opaque white backdrop, so it is given the plugin's scheme to stay see-through.
+        style={{ "--plugin-h": `${info.height_px}px`, colorScheme: "normal" } as React.CSSProperties}
       />
       <span className="credit">
         {info.name} · plugin by {info.author} · sandboxed

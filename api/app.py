@@ -76,8 +76,8 @@ async def live(
     request: Request,
     home: str = "harbourside",
     away: str = "kingsmere",
-    seed: int = 9,
-    speed: float = Query(10.0, ge=1.0, le=60.0),
+    seed: int = 7,
+    speed: float = Query(8.0, ge=1.0, le=60.0),
     plant: bool = False,
 ) -> StreamingResponse:
     """Server-Sent Events: meta, frame, event, trigger, stats and end messages for one live match.
@@ -132,4 +132,7 @@ if WEB_DIST.exists():
     def spa(path: str) -> FileResponse:
         file = (WEB_DIST / path).resolve()
         inside = file.is_relative_to(WEB_DIST.resolve())  # no ../ escapes out of the build folder
-        return FileResponse(file if path and inside and file.is_file() else WEB_DIST / "index.html")
+        target = file if path and inside and file.is_file() else WEB_DIST / "index.html"
+        # These keep their names from one build to the next (only /assets is renamed), so a browser has to check
+        # for a newer copy on every visit instead of showing a saved one after a redeploy.
+        return FileResponse(target, headers={"Cache-Control": "no-cache"})

@@ -25,6 +25,8 @@ def test_busy_lines_and_jargon_are_flagged_for_the_right_viewer():
         "uses xG, which a casual viewer won't know; say it in plain words"]
     assert style.problems("HAR ya manda en goles esperados.", "casual") == [
         "uses goles esperados, which a casual viewer won't know; say it in plain words"]
+    assert style.problems("In through the left half-space.", "casual") == [
+        "uses half-space, which a casual viewer won't know; say it in plain words"]
     assert style.problems("What a ball from Holloway, and HAR lead 1-0!", "casual") == []
 
 
